@@ -118,6 +118,28 @@ const T = {
     none: 'sin unidad'
   },
 
+  // Meal type badges
+  mealType: {
+    almuerzo: 'Almuerzo',
+    cena: 'Cena',
+    ambos: 'Almuerzo y Cena'
+  },
+
+  // Filter tabs
+  filter: {
+    all: 'Todas',
+    almuerzo: 'Almuerzo',
+    cena: 'Cena'
+  },
+
+  // Validation warnings
+  validation: {
+    nameRequired: 'El nombre es obligatorio',
+    ingredientsRequired: 'Añade al menos un ingrediente',
+    stepsRequired: 'Añade al menos un paso',
+    cenaHighCarbs: '⚠️ Esta cena tiene carbohidratos/azúcares. ¿Continuar de todos modos?'
+  },
+
   // Tags
   tags: {
     breakfast: 'desayuno',

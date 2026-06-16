@@ -87,6 +87,12 @@ const Menu = {
     return monday;
   },
 
+  // Check if recipe is suitable for dinner (low carb)
+  isDinnerSafe(recipe) {
+    if (!recipe || !recipe.nutricion) return true;
+    return (recipe.nutricion.hc || 0) === 0 && (recipe.nutricion.azucares || 0) === 0;
+  },
+
   // Assign recipe to day/meal
   assign(day, mealType, recipeId) {
     const week = this.getCurrentWeek();
@@ -94,6 +100,12 @@ const Menu = {
     this._menu[this._currentWeek] = week;
     this._save();
     return true;
+  },
+
+  // Assign with warning (for dinner with carbs)
+  assignWithWarning(day, mealType, recipeId) {
+    // Silent warning - actual warning shown in UI layer
+    this.assign(day, mealType, recipeId);
   },
 
   // Remove recipe from day/meal

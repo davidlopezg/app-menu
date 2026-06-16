@@ -553,6 +553,74 @@ select.form-input {
   font-weight: 500;
 }
 
+/* === Meal Type Badge === */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge--almuerzo {
+  background: #D4EDDA;
+  color: #155724;
+}
+
+.badge--cena {
+  background: #CCE5FF;
+  color: #004085;
+}
+
+.badge--ambos {
+  background: #E2E3E5;
+  color: #383D41;
+}
+
+/* === Meal Cell Warning === */
+.meal-cell--warning {
+  background: #FFF3CD;
+}
+
+.meal-cell__warning {
+  font-size: var(--font-size-xs);
+  margin-left: 4px;
+}
+
+/* === Filter Tabs === */
+.filter-tabs {
+  display: flex;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.filter-tab {
+  flex: 1;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  min-height: 36px;
+  transition: all 0.15s;
+}
+
+.filter-tab.active {
+  background: var(--color-primary);
+  color: white;
+}
+
+/* === Recipe Card Header === */
+.recipe-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+
 /* === Nutrition Panel === */
 .nutrition-panel {
   background: var(--color-surface);

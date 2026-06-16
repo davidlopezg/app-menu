@@ -65,12 +65,20 @@ const Components = {
     ).join('');
 
     const icon = this.getRecipeIcon(recipe.tags);
+    
+    // Meal type badge
+    const tipoComida = recipe.tipoComida || 'ambos';
+    const badgeClass = `badge--${tipoComida}`;
+    const badgeText = T.mealType[tipoComida] || 'Ambos';
 
     return `
       <div class="recipe-card" data-recipe-id="${recipe.id}">
         <div class="recipe-card__icon">${icon}</div>
         <div class="recipe-card__info">
-          <div class="recipe-card__name">${this.escapeHtml(recipe.nombre)}</div>
+          <div class="recipe-card__header">
+            <div class="recipe-card__name">${this.escapeHtml(recipe.nombre)}</div>
+            <span class="badge ${badgeClass}">${badgeText}</span>
+          </div>
           <div class="recipe-card__nutrition">
             <span>${kcal} ${T.nutrition.kcal}</span>
             <span>|</span>
@@ -92,9 +100,14 @@ const Components = {
     
     if (recipe) {
       const nutrition = recipe.nutricion || {};
+      // Warning for dinner with carbs/sugar
+      const hasWarning = mealType === 'dinner' && !Recipes.isLowCarb(recipe);
+      const warningClass = hasWarning ? 'meal-cell--warning' : '';
+      const warningIcon = hasWarning ? '<span class="meal-cell__warning">⚠️</span>' : '';
+      
       return `
-        <div class="meal-cell" data-meal="${mealType}" data-recipe-id="${recipe.id}">
-          <div class="meal-cell__type">${mealLabel}</div>
+        <div class="meal-cell ${warningClass}" data-meal="${mealType}" data-recipe-id="${recipe.id}">
+          <div class="meal-cell__type">${mealLabel} ${warningIcon}</div>
           <div class="meal-cell__name">${this.escapeHtml(recipe.nombre)}</div>
           <div class="meal-cell__kcal">${nutrition.cal || 0} kcal</div>
         </div>
@@ -327,7 +340,7 @@ const Components = {
   // ============================================
   // Recipe Selector (for modal)
   // ============================================
-  recipeSelector(recipes, onSelect) {
+  recipeSelector(recipes, onSelect, mealType = null) {
     if (recipes.length === 0) {
       return `
         <div class="empty-state">
@@ -344,7 +357,18 @@ const Components = {
       </div>
     `).join('');
 
+    // Filter tabs
+    const showFilters = true;
+    const filterTabs = showFilters ? `
+      <div class="filter-tabs" id="meal-type-filter">
+        <button class="filter-tab active" data-filter="all">${T.filter.all}</button>
+        <button class="filter-tab" data-filter="almuerzo">${T.filter.almuerzo}</button>
+        <button class="filter-tab" data-filter="cena">${T.filter.cena}</button>
+      </div>
+    ` : '';
+
     return `
+      ${filterTabs}
       <div class="search-bar">
         <input type="text" id="recipe-search" class="form-input" 
                placeholder="${T.actions.search}" oninput="App.filterRecipes()">

@@ -43,6 +43,21 @@ const Recipes = {
     );
   },
 
+  // Get recipes by meal type (almuerzo, cena, ambos)
+  getByTipoComida(tipo) {
+    if (!tipo || tipo === 'all') return this.getAll();
+    return this._recipes.filter(r => {
+      const tipoComida = r.tipoComida || 'ambos'; // Backward compatibility
+      return tipoComida === tipo || tipoComida === 'ambos';
+    });
+  },
+
+  // Check if recipe is low carb (no carbs, no sugar)
+  isLowCarb(recipe) {
+    if (!recipe || !recipe.nutricion) return false;
+    return (recipe.nutricion.hc || 0) === 0 && (recipe.nutricion.azucares || 0) === 0;
+  },
+
   // Save new recipe
   create(recipe) {
     const newRecipe = {
@@ -51,6 +66,7 @@ const Recipes = {
       ingredientes: recipe.ingredientes || [],
       pasos: recipe.pasos || [],
       nutricion: recipe.nutricion || { cal: 0, hc: 0, proteinas: 0, grasas: 0, fibra: 0, azucares: 0 },
+      tipoComida: recipe.tipoComida || 'ambos',
       imagen: recipe.imagen || '',
       tags: recipe.tags || [],
       fechaCreacion: new Date().toISOString()
@@ -110,6 +126,7 @@ const Recipes = {
           'Riega con miel al gusto.'
         ],
         nutricion: { cal: 350, hc: 58, proteinas: 12, grasas: 8, fibra: 6, azucares: 18 },
+        tipoComida: 'almuerzo',
         tags: ['desayuno', 'vegetariana', 'rápida'],
         fechaCreacion: new Date().toISOString()
       },
@@ -132,6 +149,7 @@ const Recipes = {
           'Aliña con la salsa César y mezcla bien.'
         ],
         nutricion: { cal: 420, hc: 22, proteinas: 38, grasas: 22, fibra: 4, azucares: 4 },
+        tipoComida: 'ambos',
         tags: ['almuerzo', 'cena', 'baja en carbs'],
         fechaCreacion: new Date().toISOString()
       },
@@ -155,6 +173,7 @@ const Recipes = {
           'Si queda seco, añade un poco de agua de cocción.'
         ],
         nutricion: { cal: 550, hc: 52, proteinas: 24, grasas: 28, fibra: 2, azucares: 2 },
+        tipoComida: 'almuerzo',
         tags: ['almuerzo', 'cena'],
         fechaCreacion: new Date().toISOString()
       },
@@ -178,6 +197,7 @@ const Recipes = {
           'Dale la vuelta con un plato y cocina el otro lado.'
         ],
         nutricion: { cal: 380, hc: 28, proteinas: 18, grasas: 24, fibra: 2, azucares: 4 },
+        tipoComida: 'cena',
         tags: ['almuerzo', 'cena'],
         fechaCreacion: new Date().toISOString()
       },
@@ -203,6 +223,7 @@ const Recipes = {
           'Sirve con el另一半 limón en rodajas.'
         ],
         nutricion: { cal: 400, hc: 12, proteinas: 35, grasas: 26, fibra: 4, azucares: 8 },
+        tipoComida: 'ambos',
         tags: ['almuerzo', 'cena', 'gluten free'],
         fechaCreacion: new Date().toISOString()
       }

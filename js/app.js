@@ -357,14 +357,76 @@ const App = {
     
     Components.modal.open(
       T.menu.selectRecipe,
-      Components.recipeSelector(recipes)
+      Components.recipeSelector(recipes, null, mealType)
     );
+    
+    // Setup filter tabs listener
+    this._setupFilterTabs(mealType);
+  },
+
+  _setupFilterTabs(mealType) {
+    const filterContainer = document.getElementById('meal-type-filter');
+    if (!filterContainer) return;
+    
+    filterContainer.querySelectorAll('.filter-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        // Update active state
+        filterContainer.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        // Filter recipes
+        const filter = tab.dataset.filter;
+        this._filterRecipesByType(filter);
+      });
+    });
+  },
+
+  _filterRecipesByType(tipo) {
+    const query = document.getElementById('recipe-search')?.value || '';
+    let recipes;
+    
+    if (query.trim()) {
+      // Combine search with type filter
+      const searched = Recipes.search(query);
+      recipes = Recipes.getByTipoComida(tipo).filter(r => 
+        searched.some(sr => sr.id === r.id)
+      );
+    } else {
+      recipes = Recipes.getByTipoComida(tipo);
+    }
+    
+    const container = document.getElementById('recipe-list');
+    if (!container) return;
+    
+    if (recipes.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state__icon">🔍</div>
+          <div class="empty-state__title">Sin resultados</div>
+        </div>
+      `;
+    } else {
+      container.innerHTML = recipes.map(r => `
+        <div class="recipe-card" onclick="App.selectRecipeForMeal('${r.id}')">
+          ${Components.recipeCard(r)}
+        </div>
+      `).join('');
+    }
   },
 
   selectRecipeForMeal(recipeId) {
     if (!this.pendingMeal) return;
     
     const { day, mealType } = this.pendingMeal;
+    const recipe = Recipes.getById(recipeId);
+    
+    // Warning for dinner with carbs/sugar
+    if (mealType === 'dinner' && !Recipes.isLowCarb(recipe)) {
+      if (!confirm(T.validation.cenaHighCarbs)) {
+        return;
+      }
+    }
+    
     Menu.assign(day, mealType, recipeId);
     
     Components.modal.close();
