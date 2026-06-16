@@ -568,22 +568,41 @@ const App = {
   filterRecipes() {
     const query = document.getElementById('recipe-search').value;
     const recipes = Recipes.search(query);
-    const container = document.getElementById('recipe-list-container');
     
-    if (!container) return;
-
-    if (recipes.length === 0) {
-      container.innerHTML = Components.emptyState('🔍', 'Sin resultados', 'Prueba con otra búsqueda');
-    } else {
-      container.innerHTML = recipes.map(r => Components.recipeCard(r)).join('');
-      
-      // Re-attach click handlers
-      container.querySelectorAll('.recipe-card').forEach(card => {
-        card.addEventListener('click', () => {
-          const id = card.dataset.recipeId;
-          this.navigate('recipe', { id });
+    // Check if we're in the recipes list view
+    const listContainer = document.getElementById('recipe-list-container');
+    if (listContainer) {
+      if (recipes.length === 0) {
+        listContainer.innerHTML = Components.emptyState('🔍', 'Sin resultados', 'Prueba con otra búsqueda');
+      } else {
+        listContainer.innerHTML = recipes.map(r => Components.recipeCard(r)).join('');
+        listContainer.querySelectorAll('.recipe-card').forEach(card => {
+          card.addEventListener('click', () => {
+            const id = card.dataset.recipeId;
+            this.navigate('recipe', { id });
+          });
         });
-      });
+      }
+      return;
+    }
+    
+    // Check if we're in the recipe selector modal
+    const modalList = document.getElementById('recipe-list');
+    if (modalList) {
+      if (recipes.length === 0) {
+        modalList.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state__icon">🔍</div>
+            <div class="empty-state__title">Sin resultados</div>
+          </div>
+        `;
+      } else {
+        modalList.innerHTML = recipes.map(r => `
+          <div class="recipe-card" onclick="App.selectRecipeForMeal('${r.id}')">
+            ${Components.recipeCard(r)}
+          </div>
+        `).join('');
+      }
     }
   },
 
