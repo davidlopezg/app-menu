@@ -146,13 +146,41 @@ const Menu = {
   getUsedRecipeIds() {
     const week = this.getCurrentWeek();
     const ids = [];
-    Store.getDaysOrder().forEach(day => {
-      Store.getMealTypes().forEach(meal => {
+    Store.getMealTypes().forEach(meal => {
+      Store.getDaysOrder().forEach(day => {
         if (week[day][meal]) {
           ids.push(week[day][meal]);
         }
       });
     });
     return [...new Set(ids)];
+  },
+
+  // Generate shopping list from current week menu
+  getShoppingList() {
+    const week = this.getCurrentWeek();
+    const ingredients = {};
+    Store.getMealTypes().forEach(meal => {
+      Store.getDaysOrder().forEach(day => {
+        const recipeId = week[day]?.[meal];
+        if (recipeId) {
+          const recipe = Recipes.getById(recipeId);
+          if (recipe) {
+            recipe.ingredientes.forEach(ing => {
+              if (ing.unidad === 'none') return;
+              const key = ing.nombre.toLowerCase();
+              if (ingredients[key]) {
+                const existingQty = parseFloat(ingredients[key].cantidad) || 0;
+                const newQty = parseFloat(ing.cantidad) || 0;
+                ingredients[key].cantidad = String(existingQty + newQty);
+              } else {
+                ingredients[key] = { ...ing };
+              }
+            });
+          }
+        }
+      });
+    });
+    return Object.values(ingredients);
   }
 };

@@ -86,7 +86,13 @@ const T = {
     selectRecipe: 'Seleccionar receta',
     removeMeal: 'Eliminar',
     replaceMeal: 'Cambiar',
-    weekOf: 'Semana del'
+    weekOf: 'Semana del',
+    shoppingList: 'Lista de la compra',
+    viewShoppingList: 'Ver lista de la compra',
+    shoppingListTitle: 'Lista de la Compra',
+    shoppingListEmpty: 'No hay recetas asignadas esta semana',
+    copyList: 'Copiar lista',
+    listCopied: '¡Lista copiada!'
   },
 
   // Validation

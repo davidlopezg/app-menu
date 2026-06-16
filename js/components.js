@@ -500,6 +500,65 @@ const Components = {
   },
 
   // ============================================
+  // Shopping List
+  // ============================================
+  renderShoppingList(ingredients) {
+    if (ingredients.length === 0) {
+      return `
+        <div class="empty-state">
+          <div class="empty-state__icon">🛒</div>
+          <div class="empty-state__title">${T.menu.shoppingListEmpty}</div>
+        </div>
+      `;
+    }
+
+    const items = ingredients.map((ing, i) => `
+      <li class="shopping-item" data-index="${i}">
+        <label class="shopping-item__label">
+          <input type="checkbox" class="shopping-item__checkbox">
+          <span class="shopping-item__text">
+            <span class="shopping-item__name">${this.escapeHtml(ing.nombre)}</span>
+            <span class="shopping-item__qty">${ing.cantidad} ${T.units[ing.unidad] || ing.unidad}</span>
+          </span>
+        </label>
+      </li>
+    `).join('');
+
+    return `
+      <div class="shopping-list">
+        <div class="shopping-list__header">
+          <button class="btn btn--secondary btn--sm" onclick="Components.copyShoppingList(${ingredients.length})">
+            📋 ${T.menu.copyList}
+          </button>
+        </div>
+        <ul class="shopping-list__items">
+          ${items}
+        </ul>
+      </div>
+    `;
+  },
+
+  copyShoppingList(itemCount) {
+    const ingredients = Menu.getShoppingList();
+    const text = ingredients.map(ing => 
+      `- ${ing.nombre}: ${ing.cantidad} ${T.units[ing.unidad] || ing.unidad}`
+    ).join('\n');
+
+    navigator.clipboard.writeText(text).then(() => {
+      this.toast.show(T.menu.listCopied);
+    }).catch(() => {
+      // Fallback for older browsers
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      this.toast.show(T.menu.listCopied);
+    });
+  },
+
+  // ============================================
   // Helpers
   // ============================================
   escapeHtml(text) {

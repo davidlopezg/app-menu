@@ -114,6 +114,7 @@ const App = {
     this.currentView = 'menu';
     this._updateNav('menu');
     this._updateHeader(T.menu.title, false);
+    this._showShoppingListBtn();
     
     const main = document.getElementById('main-content');
     
@@ -167,6 +168,27 @@ const App = {
     // Click handlers for meal cells
     main.innerHTML = html;
     this._attachMealCellListeners();
+  },
+
+  _showShoppingListBtn() {
+    const menuBtn = document.getElementById('btn-menu');
+    menuBtn.innerHTML = `
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <path d="M16 10a4 4 0 01-8 0"/>
+      </svg>
+    `;
+    menuBtn.setAttribute('aria-label', T.menu.shoppingList);
+    menuBtn.onclick = () => App.showShoppingList();
+  },
+
+  showShoppingList() {
+    const ingredients = Menu.getShoppingList();
+    Components.modal.open(
+      T.menu.shoppingListTitle,
+      Components.renderShoppingList(ingredients)
+    );
   },
 
   // ============================================
