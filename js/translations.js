@@ -1,0 +1,138 @@
+// ============================================
+// Translations — App Menú Semanal
+// ============================================
+
+const T = {
+  // Days
+  days: {
+    monday: 'Lunes',
+    tuesday: 'Martes',
+    wednesday: 'Miércoles',
+    thursday: 'Jueves',
+    friday: 'Viernes',
+    saturday: 'Saturday',
+    sunday: 'Domingo'
+  },
+  daysShort: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
+
+  // Meals
+  meals: {
+    breakfast: 'Desayuno',
+    lunch: 'Almuerzo',
+    dinner: 'Cena'
+  },
+
+  // Navigation
+  nav: {
+    menu: 'Menú',
+    recipes: 'Recetas'
+  },
+
+  // Actions
+  actions: {
+    add: 'Añadir',
+    edit: 'Editar',
+    delete: 'Eliminar',
+    save: 'Guardar',
+    cancel: 'Cancelar',
+    search: 'Buscar...',
+    back: 'Volver',
+    assign: 'Asignar al menú',
+    viewRecipe: 'Ver receta'
+  },
+
+  // Recipe
+  recipe: {
+    newRecipe: 'Nueva Receta',
+    editRecipe: 'Editar Receta',
+    recipeName: 'Nombre de la receta',
+    ingredients: 'Ingredientes',
+    steps: 'Pasos',
+    nutrition: 'Información Nutricional',
+    addIngredient: '+ Añadir ingrediente',
+    addStep: '+ Añadir paso',
+    namePlaceholder: 'Nombre del ingrediente',
+    quantityPlaceholder: 'Cantidad',
+    stepPlaceholder: 'Describe el paso...',
+    buscarNutrientes: 'Buscar nutrientes',
+    ingrediente: 'Ingrediente',
+    cantidad: 'Cantidad',
+    unidad: 'Unidad',
+    porcion: 'Porción (g/ml)',
+    sinRecetas: 'No hay recetas todavía',
+    sinRecetasHint: 'Pulsa el botón + para crear tu primera receta'
+  },
+
+  // Nutrition
+  nutrition: {
+    calories: 'Calorías',
+    carbs: 'Carbohidratos',
+    protein: 'Proteínas',
+    fat: 'Grasas',
+    fiber: 'Fibra',
+    sugar: 'Azúcares',
+    kcal: 'kcal',
+    searching: 'Buscando...',
+    notFound: 'No encontrado',
+    manualEntry: 'Introducir manualmente',
+    searchFood: 'Buscar alimento',
+    porRacion: 'Por ración'
+  },
+
+  // Menu
+  menu: {
+    title: 'Menú Semanal',
+    today: 'Hoy',
+    thisWeek: 'Esta semana',
+    selectRecipe: 'Seleccionar receta',
+    removeMeal: 'Eliminar',
+    replaceMeal: 'Cambiar',
+    weekOf: 'Semana del'
+  },
+
+  // Validation
+  validation: {
+    nameRequired: 'El nombre es obligatorio',
+    ingredientsRequired: 'Añade al menos un ingrediente',
+    stepsRequired: 'Añade al menos un paso'
+  },
+
+  // Toast messages
+  toast: {
+    recipeSaved: 'Receta guardada',
+    recipeDeleted: 'Receta eliminada',
+    mealAssigned: 'Comida asignada',
+    mealRemoved: 'Asignación eliminada',
+    error: 'Ha ocurrido un error'
+  },
+
+  // Units
+  units: {
+    g: 'g',
+    ml: 'ml',
+    cup: 'taza',
+    tbsp: 'cda',
+    tsp: 'cdita',
+    piece: 'ud',
+    slice: 'rebanada',
+    none: 'sin unidad'
+  },
+
+  // Tags
+  tags: {
+    breakfast: 'desayuno',
+    lunch: 'almuerzo',
+    dinner: 'cena',
+    snack: 'tentempié',
+    quick: 'rápida',
+    vegetarian: 'vegetariana',
+    vegan: 'vegana',
+    glutenFree: 'sin gluten',
+    lowCarb: 'baja en carbs'
+  }
+};
+
+// Export for module use
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = T;
+}
