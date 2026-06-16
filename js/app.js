@@ -10,10 +10,13 @@ const App = {
   // ============================================
   // Initialize
   // ============================================
-  init() {
+  async init() {
     // Init modules
     Recipes.init();
     Menu.init();
+
+    // Try to sync from GitHub (María will get David's data)
+    await Sync.load();
 
     // Setup event listeners
     this._setupEventListeners();
@@ -174,13 +177,29 @@ const App = {
     const menuBtn = document.getElementById('btn-menu');
     menuBtn.innerHTML = `
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
-        <line x1="3" y1="6" x2="21" y2="6"/>
-        <path d="M16 10a4 4 0 01-8 0"/>
+        <path d="M4 6h16M4 12h10M4 18h16"/>
       </svg>
     `;
-    menuBtn.setAttribute('aria-label', T.menu.shoppingList);
-    menuBtn.onclick = () => App.showShoppingList();
+    menuBtn.setAttribute('aria-label', 'Menú');
+    menuBtn.onclick = () => App.showMenuOptions();
+  },
+
+  showMenuOptions() {
+    const optionsHtml = `
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button class="btn btn--secondary btn--full" onclick="App.showShoppingList(); Components.modal.close();">
+          🛒 ${T.menu.shoppingList}
+        </button>
+        <button class="btn btn--secondary btn--full" onclick="App.showSettings();">
+          ⚙️ Ajustes / Sync
+        </button>
+      </div>
+    `;
+    Components.modal.open('Opciones', optionsHtml);
+  },
+
+  showSettings() {
+    Components.modal.open('⚙️ Ajustes', Sync.renderSettings());
   },
 
   showShoppingList() {

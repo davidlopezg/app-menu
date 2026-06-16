@@ -962,6 +962,15 @@ select.form-input {
   }
 }
 
+/* === Sync Settings === */
+.sync-settings {
+  padding: var(--space-sm);
+}
+
+.sync-settings .form-group {
+  margin-bottom: var(--space-md);
+}
+
 /* === Print === */
 @media print {
   .header, .nav-tabs {

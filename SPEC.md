@@ -267,6 +267,47 @@ Si API falla: mostrar inputs manuales para cada valor nutricional.
 
 ---
 
+## Sincronización GitHub (Gist)
+
+### Objetivo
+Permitir que David y María vean y editen el mismo menú desde sus móviles.
+
+### Arquitectura
+- **Almacenamiento:** GitHub Gist privado
+- **Gist ID:** `c297536c9c15f7ad42a37a1feb6afba0`
+- **Token:** Cada usuario guarda su token en localStorage (solo acceso a Gist)
+
+### Estructura del JSON (en Gist)
+```json
+{
+  "version": "1.0",
+  "updated": "2026-06-17T12:00:00.000Z",
+  "menu": { ... },
+  "recipes": [ ... ]
+}
+```
+
+### Flujo de Uso
+1. **Primera vez:** El usuario pega su token GitHub en Ajustes
+2. **Abrir app:** Se descargan datos del Gist automáticamente
+3. **Hacer cambios:** Se guardan en localStorage
+4. **Sincronizar:** Subir cambios al Gist desde Ajustes → "Subir al Gist"
+5. **Otro dispositivo:** Descargar del Gist desde Ajustes → "Descargar del Gist"
+
+### Seguridad
+- Token solo tiene scope `gist` (no acceso a repos)
+- Token se guarda en localStorage del navegador (no en servidor)
+- Gist es privado (solo quien tiene el link puede verlo)
+
+### Ajustes en la App
+El menú de ajustes permite:
+- Guardar/actualizar token GitHub
+- Subir datos al Gist (⬆️)
+- Descargar datos del Gist (⬇️)
+- Ver estado de sincronización
+
+---
+
 ## Siguiente paso
 
 ¿Aprobás estas especificaciones? Si confirmás, avanzo a **Fase 3: Diseño** (arquitectura + diagramas).
