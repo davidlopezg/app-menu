@@ -10,15 +10,14 @@ const T = {
     wednesday: 'Miércoles',
     thursday: 'Jueves',
     friday: 'Viernes',
-    saturday: 'Saturday',
+    saturday: 'Sábado',
     sunday: 'Domingo'
   },
   daysShort: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
 
   // Meals
   meals: {
-    breakfast: 'Desayuno',
-    lunch: 'Almuerzo',
+    lunch: 'Comida',
     dinner: 'Cena'
   },
 

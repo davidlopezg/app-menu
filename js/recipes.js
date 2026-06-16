@@ -127,7 +127,7 @@ const Recipes = {
         ],
         nutricion: { cal: 350, hc: 58, proteinas: 12, grasas: 8, fibra: 6, azucares: 18 },
         tipoComida: 'almuerzo',
-        tags: ['desayuno', 'vegetariana', 'rápida'],
+        tags: ['vegetariana', 'rápida'],
         fechaCreacion: new Date().toISOString()
       },
       {
@@ -150,7 +150,7 @@ const Recipes = {
         ],
         nutricion: { cal: 420, hc: 22, proteinas: 38, grasas: 22, fibra: 4, azucares: 4 },
         tipoComida: 'ambos',
-        tags: ['almuerzo', 'cena', 'baja en carbs'],
+        tags: ['almuerzo', 'cena'],
         fechaCreacion: new Date().toISOString()
       },
       {

@@ -21,7 +21,6 @@ const Menu = {
     const week = {};
     Store.getDaysOrder().forEach(day => {
       week[day] = {
-        breakfast: null,
         lunch: null,
         dinner: null
       };

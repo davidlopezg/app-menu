@@ -89,7 +89,7 @@ const Store = {
 
   // Meal types
   getMealTypes() {
-    return ['breakfast', 'lunch', 'dinner'];
+    return ['lunch', 'dinner'];
   },
 
   // Clear all data (for debugging)
