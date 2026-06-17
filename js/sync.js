@@ -128,6 +128,7 @@ const Sync = {
   
   // Merge Gist data with localStorage
   // options.force: if true, overwrite local data with Gist content
+  // Returns { mode, copied? }
   mergeData(githubData, options = {}) {
     const force = !!options.force;
 
@@ -138,6 +139,16 @@ const Sync = {
       }
       if (githubData.recipes !== undefined) {
         Store.set(Store.KEYS.RECIPES, githubData.recipes);
+      }
+      // Invalidate in-memory caches so Menu and Recipes re-read from Store.
+      // Without this, App.renderMenuView() would render stale data because
+      // Menu._menu / Recipes._recipes were loaded once at boot.
+      if (typeof Menu !== 'undefined' && Menu._menu !== undefined) {
+        Menu._menu = Store.get(Store.KEYS.MENU) || {};
+        Menu._currentWeek = Store.getWeekKey();
+      }
+      if (typeof Recipes !== 'undefined' && Recipes._recipes !== undefined) {
+        Recipes._recipes = Store.get(Store.KEYS.RECIPES) || [];
       }
       return { mode: 'overwrite' };
     }
@@ -265,8 +276,17 @@ const Sync = {
     const result = await this.load({ force: true });
     if (result.ok) {
       Components.toast.show('✅ Datos del Gist cargados');
-      if (typeof App !== 'undefined' && App.renderMenuView) {
-        App.renderMenuView();
+      // Close settings modal so user actually sees the new data
+      if (typeof Components !== 'undefined' && Components.modal && Components.modal.close) {
+        Components.modal.close();
+      }
+      // Re-render the current view with fresh data from Store
+      if (typeof App !== 'undefined') {
+        if (App.currentView === 'menu' && typeof App.renderMenuView === 'function') {
+          App.renderMenuView();
+        } else if (typeof App._handleRoute === 'function') {
+          App._handleRoute();
+        }
       }
     } else {
       Components.toast.show(this.errorMessage(result.reason) || '❌ Error al descargar del Gist');
