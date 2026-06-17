@@ -22,49 +22,61 @@ const Sync = {
   },
 
   // Load menu from Gist
-  async load() {
+  // options.force: if true, overwrite local data with Gist content (used by manual "Descargar")
+  // Returns { ok, reason?, mode?, copied? } for consistent error handling
+  async load(options = {}) {
     if (!this.hasToken()) {
       console.log('Sync: no token configured');
-      return false;
+      return { ok: false, reason: 'no-token' };
     }
-    
+
     try {
       const response = await fetch(this.GIST_RAW_URL + '?t=' + Date.now());
       if (response.ok) {
         const data = await response.json();
-        this.mergeData(data);
-        return true;
+        const mergeResult = this.mergeData(data, { force: !!options.force });
+        return { ok: true, ...mergeResult };
       }
+      const reason = response.status === 401 ? 'token-invalid'
+                   : response.status === 403 ? 'no-gist-scope'
+                   : response.status === 404 ? 'gist-not-found'
+                   : 'get-failed';
+      return { ok: false, reason };
     } catch (e) {
       console.log('Sync: usando datos locales');
+      return { ok: false, reason: 'network' };
     }
-    return false;
   },
   
   // Save menu to Gist
   async save() {
     if (!this.hasToken()) {
       Components.toast.show('Configura el token en Ajustes');
-      return false;
+      return { ok: false, reason: 'no-token' };
     }
-    
+
     const token = this.getToken();
     const data = this.getExportData();
     const content = JSON.stringify(data, null, 2);
-    
+
     try {
       // Get current Gist to get SHA
       const getResponse = await fetch(this.GIST_API_URL, {
         headers: { 'Authorization': `token ${token}` }
       });
-      
+
       if (!getResponse.ok) {
-        throw new Error('Error getting Gist');
+        const reason = getResponse.status === 401 ? 'token-invalid'
+                     : getResponse.status === 403 ? 'no-gist-scope'
+                     : getResponse.status === 404 ? 'gist-not-found'
+                     : 'get-failed';
+        Components.toast.show(this.errorMessage(reason));
+        return { ok: false, reason };
       }
-      
+
       const gist = await getResponse.json();
       const sha = gist.files['menu-data.json']?.sha;
-      
+
       // Update Gist
       const updateResponse = await fetch(this.GIST_API_URL, {
         method: 'PATCH',
@@ -81,30 +93,69 @@ const Sync = {
           }
         })
       });
-      
+
       if (updateResponse.ok) {
-        return true;
-      } else {
-        throw new Error('Error updating Gist');
+        return { ok: true };
       }
+
+      const reason = updateResponse.status === 401 ? 'token-invalid'
+                   : updateResponse.status === 403 ? 'no-gist-scope'
+                   : updateResponse.status === 404 ? 'gist-not-found'
+                   : updateResponse.status === 409 ? 'sha-mismatch'
+                   : 'update-failed';
+      Components.toast.show(this.errorMessage(reason));
+      return { ok: false, reason };
     } catch (e) {
       console.error('Sync save error:', e);
-      return false;
+      Components.toast.show('❌ Error de red al sincronizar');
+      return { ok: false, reason: 'network' };
     }
+  },
+
+  // Human-readable error messages (Spanish)
+  errorMessage(reason) {
+    const messages = {
+      'token-invalid':    '❌ Token inválido o expirado — generá uno nuevo',
+      'no-gist-scope':    '❌ Token sin permisos de Gist — regenerá con scope "gist"',
+      'gist-not-found':   '❌ Gist no encontrado — revisá el ID',
+      'sha-mismatch':     '⚠️ Conflicto: alguien más subió antes. Descargá y volvé a subir',
+      'get-failed':       '❌ No pude leer el Gist — reintentá',
+      'update-failed':    '❌ No pude actualizar el Gist — reintentá',
+      'network':          '❌ Error de red al sincronizar'
+    };
+    return messages[reason] || '❌ Error al sincronizar';
   },
   
   // Merge Gist data with localStorage
-  mergeData(githubData) {
+  // options.force: if true, overwrite local data with Gist content
+  mergeData(githubData, options = {}) {
+    const force = !!options.force;
+
+    if (force) {
+      // Overwrite: only write fields that exist in Gist
+      if (githubData.menu !== undefined) {
+        Store.set(Store.KEYS.MENU, githubData.menu);
+      }
+      if (githubData.recipes !== undefined) {
+        Store.set(Store.KEYS.RECIPES, githubData.recipes);
+      }
+      return { mode: 'overwrite' };
+    }
+
+    // First-time merge: only fill empty local slots
     const localMenu = Store.get(Store.KEYS.MENU);
     const localRecipes = Store.get(Store.KEYS.RECIPES);
-    
-    // Si local está vacío, usar GitHub
+    let copied = 0;
+
     if (!localMenu && githubData.menu) {
       Store.set(Store.KEYS.MENU, githubData.menu);
+      copied++;
     }
     if (!localRecipes && githubData.recipes) {
       Store.set(Store.KEYS.RECIPES, githubData.recipes);
+      copied++;
     }
+    return { mode: 'fill-empty', copied };
   },
   
   // Get current data as JSON
@@ -133,11 +184,11 @@ const Sync = {
           
           <div class="form-group">
             <label class="form-label">Token GitHub</label>
-            <input type="password" id="sync-token-input" class="form-input" 
-                   value="${hasToken ? this.getToken() : ''}" 
-                   placeholder="ghp_...">
+            <input type="password" id="sync-token-input" class="form-input"
+                   value="${hasToken ? this.getToken() : ''}"
+                   placeholder="ghp_... o github_pat_...">
             <small style="color: var(--color-text-muted);">
-              Token con acceso a Gist
+              Token con scope <code>gist</code> (clásico o fine-grained)
             </small>
           </div>
           
@@ -164,36 +215,61 @@ const Sync = {
     `;
   },
   
+  // Accept classic PAT (ghp_), fine-grained PAT (github_pat_) and OAuth (gho_)
+  isValidToken(token) {
+    if (!token) return false;
+    return /^(ghp_|github_pat_|gho_)/.test(token);
+  },
+
   saveToken() {
     const input = document.getElementById('sync-token-input');
     const token = input.value.trim();
-    
-    if (token && token.startsWith('ghp_')) {
+
+    if (this.isValidToken(token)) {
       this.setToken(token);
       Components.toast.show('Token guardado');
     } else {
-      Components.toast.show('Token inválido (debe empezar con ghp_)');
+      Components.toast.show('Token inválido (debe empezar con ghp_, github_pat_ o gho_)');
     }
   },
-  
+
   async manualSync() {
     Components.toast.show('Subiendo...');
-    const success = await this.save();
-    if (success) {
+    const result = await this.save();
+    if (result.ok) {
       Components.toast.show('✅ Sincronizado');
-    } else {
-      Components.toast.show('❌ Error al sincronizar');
     }
+    // On error, save() already showed a specific toast
   },
-  
+
   async manualLoad() {
+    // Check if there's local data that would be overwritten
+    const localMenu = Store.get(Store.KEYS.MENU);
+    const localRecipes = Store.get(Store.KEYS.RECIPES);
+    const hasLocal = (localMenu && Object.keys(localMenu).length > 0) ||
+                     (localRecipes && localRecipes.length > 0);
+
+    if (hasLocal) {
+      const confirmed = confirm(
+        '⚠️ Esto va a SOBRESCRIBIR tus datos locales con los del Gist.\n\n' +
+        'Si tenés cambios sin subir, primero "Subir al Gist" y después recargá.\n\n' +
+        '¿Descargar y sobrescribir igual?'
+      );
+      if (!confirmed) {
+        Components.toast.show('Cancelado');
+        return;
+      }
+    }
+
     Components.toast.show('Descargando...');
-    const success = await this.load();
-    if (success) {
-      Components.toast.show('✅ Datos cargados');
-      App.renderMenuView();
+    const result = await this.load({ force: true });
+    if (result.ok) {
+      Components.toast.show('✅ Datos del Gist cargados');
+      if (typeof App !== 'undefined' && App.renderMenuView) {
+        App.renderMenuView();
+      }
     } else {
-      Components.toast.show('❌ Error al cargar');
+      Components.toast.show(this.errorMessage(result.reason) || '❌ Error al descargar del Gist');
     }
   }
 };
