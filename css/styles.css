@@ -1156,3 +1156,20 @@ select.form-input {
 .recipe-link-btn svg {
   flex-shrink: 0;
 }
+
+/* === App footer (version indicator) === */
+.app-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: var(--space-lg) 0 calc(var(--space-md) + var(--safe-bottom));
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  opacity: 0.65;
+}
+
+.app-footer__sync {
+  color: var(--color-success);
+  font-weight: 600;
+}

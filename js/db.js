@@ -162,6 +162,7 @@ const DB = {
           tipoComida: r.tipo_comida,
           imagen: r.imagen || '',
           tags: r.tags || [],
+          link: r.link || '',
           fechaCreacion: r.fecha_creacion
         }));
         Store.set(Store.KEYS.RECIPES, mapped);   // _pulling=true → no dispara push
@@ -327,6 +328,17 @@ const DB = {
               Cerrar sesión
             </button>
           </div>
+        </div>
+
+        <div class="card" style="margin-top: 16px;">
+          <h3 style="margin-bottom: 8px;">📱 App</h3>
+          <p style="color: var(--color-text-muted); font-size: 13px;">
+            Versión: <strong style="color: var(--color-text);">${App.VERSION}</strong>
+          </p>
+          <p style="color: var(--color-text-muted); font-size: 12px; margin-top: 4px;">
+            Si ves funciones que no andan, asegurate de tener la última versión
+            recargando con caché vacía.
+          </p>
         </div>
       </div>
     `;

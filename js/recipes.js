@@ -69,6 +69,7 @@ const Recipes = {
       tipoComida: recipe.tipoComida || 'ambos',
       imagen: recipe.imagen || '',
       tags: recipe.tags || [],
+      link: recipe.link || '',
       fechaCreacion: new Date().toISOString()
     };
     this._recipes.push(newRecipe);

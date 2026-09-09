@@ -7,6 +7,10 @@ const App = {
   currentRecipeId: null,
   pendingMeal: null, // For assigning recipes: { day, mealType }
 
+  // Version visible en el footer. Cambiá este string cada vez que hagas
+  // commit+push para poder verificar si el celular esta sincronizado.
+  VERSION: 'v6.1 (2025-09-09)',
+
   // ============================================
   // Initialize
   // ============================================
@@ -209,6 +213,8 @@ const App = {
     
     html += '</div>';
 
+    html += this._renderFooter();
+
     // Click handlers for meal cells
     main.innerHTML = html;
     this._attachMealCellListeners();
@@ -278,7 +284,7 @@ const App = {
 
     html += '</div>';
     html += `
-      <button class="btn btn--primary btn--full" style="margin-top: 16px;" 
+      <button class="btn btn--primary btn--full" style="margin-top: 16px;"
               onclick="App.navigate('recipe', { id: 'new' })">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 5v14M5 12h14"/>
@@ -286,6 +292,8 @@ const App = {
         ${T.recipe.newRecipe}
       </button>
     `;
+
+    html += this._renderFooter();
 
     main.innerHTML = html;
 
@@ -389,6 +397,7 @@ const App = {
           ${T.actions.edit}
         </button>
       </div>
+      ${this._renderFooter()}
     `;
   },
 
@@ -710,6 +719,16 @@ const App = {
 
   _updateHeaderTitle(title) {
     document.getElementById('header-title').textContent = title;
+  },
+
+  // Footer con version + timestamp de sincronizacion.
+  // Se agrega al final del main-content de cualquier vista activa.
+  _renderFooter() {
+    return `
+      <div class="app-footer">
+        <span>${App.VERSION}</span>
+        ${DB.isAuth() ? '<span class="app-footer__sync">\u2713 sincronizado</span>' : ''}
+      </div>`;
   }
 };
 
