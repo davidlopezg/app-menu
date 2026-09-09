@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v10 (2025-09-09)',
+  VERSION: 'v11 (2025-09-09)',
 
   // ============================================
   // Initialize
@@ -417,8 +417,9 @@ const App = {
     Components.modal.open('Opciones', optionsHtml);
   },
 
-  showSettings() {
-    Components.modal.open('⚙️ Ajustes', DB.renderSettings());
+  async showSettings() {
+    const html = await DB.renderSettings();
+    Components.modal.open('⚙️ Ajustes', html);
   },
 
   showShoppingList() {
