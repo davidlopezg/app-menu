@@ -15,26 +15,65 @@ const App = {
     Recipes.init();
     Menu.init();
 
-    // Supabase: setup + (if auth) pullAll + subscribe
-    await DB.init();
-
     this._setupEventListeners();
 
-    // If not signed in, show login view (DB.onAuthStateChange will redirect when ready)
-    if (!DB.client) {
-      console.error('DB no inicializado — no se puede continuar');
+    // Supabase: setup + (if auth) pullAll + subscribe
+    let dbOk = false;
+    try {
+      dbOk = await DB.init();
+    } catch (err) {
+      console.error('Error iniciando Supabase:', err);
+    }
+
+    if (!dbOk || !DB.client) {
+      // Supabase no se cargo (CDN fallo o error de config).
+      // Mostramos mensaje visible en vez de dejar la app vacia.
+      this.currentView = 'signin';
+      this._renderFatalError(
+        'No se pudo conectar con Supabase. ' +
+        'Revisa tu conexion a internet y recarga la pagina.'
+      );
       return;
     }
-    const { data: { session } } = await DB.client.auth.getSession();
-    if (session) {
-      this._handleRoute();
-    } else {
+
+    // Si llego hasta aca, DB esta OK.
+    try {
+      const { data: { session } } = await DB.client.auth.getSession();
+      if (session) {
+        this._handleRoute();
+      } else {
+        this.currentView = 'signin';
+        DB.renderSignInView();
+      }
+    } catch (err) {
+      console.error('Error leyendo sesion:', err);
       this.currentView = 'signin';
       DB.renderSignInView();
     }
 
     // Listen for hash changes
     window.addEventListener('hashchange', () => this._handleRoute());
+  },
+
+  // Muestra un mensaje de error visible en la UI
+  _renderFatalError(message) {
+    const main = document.getElementById('main-content');
+    if (main) {
+      main.innerHTML = `
+        <div class="signin-view">
+          <div class="signin-card">
+            <div class="signin-card__icon">⚠️</div>
+            <h2 class="signin-card__title">No se pudo cargar la app</h2>
+            <p class="signin-card__hint">${Components.escapeHtml(message)}</p>
+            <button class="btn btn--primary btn--full" onclick="location.reload()">
+              Reintentar
+            </button>
+          </div>
+        </div>`;
+    }
+    // Ocultar nav tabs (no se puede navegar sin DB)
+    const nav = document.getElementById('nav-tabs');
+    if (nav) nav.classList.add('hidden');
   },
 
   // ============================================
