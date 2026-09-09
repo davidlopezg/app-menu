@@ -336,9 +336,14 @@ const App = {
 
     const icon = Components.getRecipeIcon(recipe.tags);
 
+    const heroImage = recipe.imagen
+      ? `<img class="recipe-detail__hero" src="${Components.escapeHtml(recipe.imagen)}" alt="${Components.escapeHtml(recipe.nombre)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+         <div class="recipe-detail__icon" style="display:none">${icon}</div>`
+      : `<div class="recipe-detail__icon">${icon}</div>`;
+
     main.innerHTML = `
       <div class="recipe-detail__header">
-        <div class="recipe-detail__icon">${icon}</div>
+        ${heroImage}
         <h2 class="recipe-detail__name">${Components.escapeHtml(recipe.nombre)}</h2>
         ${tags ? `<div class="recipe-card__tags" style="justify-content: center;">${tags}</div>` : ''}
       </div>
@@ -603,7 +608,13 @@ const App = {
       nombre,
       ingredientes,
       pasos,
-      nutricion
+      nutricion,
+      imagen: (form.querySelector('[name="imagen"]')?.value || '').trim(),
+      tipoComida: form.querySelector('[name="tipoComida"]:checked')?.value || 'ambos',
+      tags: (form.querySelector('[name="tags"]')?.value || '')
+              .split(',')
+              .map(t => t.trim().toLowerCase())
+              .filter(Boolean),
     };
 
     if (isEdit && id) {

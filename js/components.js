@@ -59,21 +59,27 @@ const Components = {
     const kcal = nutrition.cal || 0;
     const protein = nutrition.proteinas || 0;
     const fat = nutrition.grasas || 0;
-    
-    const tags = recipe.tags.slice(0, 2).map(t => 
+
+    const tags = recipe.tags.slice(0, 2).map(t =>
       `<span class="tag">${T.tags[t] || t}</span>`
     ).join('');
 
     const icon = this.getRecipeIcon(recipe.tags);
-    
+
     // Meal type badge
     const tipoComida = recipe.tipoComida || 'ambos';
     const badgeClass = `badge--${tipoComida}`;
     const badgeText = T.mealType[tipoComida] || 'Ambos';
 
+    // Imagen si existe, si no emoji
+    const thumb = recipe.imagen
+      ? `<img class="recipe-card__img" src="${this.escapeHtml(recipe.imagen)}" alt="" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`
+      : '';
+    const iconFallback = `<div class="recipe-card__icon" style="${recipe.imagen ? 'display:none' : ''}">${icon}</div>`;
+
     return `
       <div class="recipe-card" data-recipe-id="${recipe.id}">
-        <div class="recipe-card__icon">${icon}</div>
+        ${thumb}${iconFallback}
         <div class="recipe-card__info">
           <div class="recipe-card__header">
             <div class="recipe-card__name">${this.escapeHtml(recipe.nombre)}</div>
@@ -184,6 +190,9 @@ const Components = {
     const title = isEdit ? T.recipe.editRecipe : T.recipe.newRecipe;
     const name = recipe ? this.escapeHtml(recipe.nombre) : '';
     const existingNutrition = recipe ? recipe.nutricion : null;
+    const existingTags = recipe && recipe.tags ? recipe.tags.join(', ') : '';
+    const existingTipo = recipe ? (recipe.tipoComida || 'ambos') : 'ambos';
+    const existingImg = recipe && recipe.imagen ? this.escapeHtml(recipe.imagen) : '';
 
     // Ingredients
     const ingredients = recipe && recipe.ingredientes.length > 0
@@ -198,15 +207,66 @@ const Components = {
     // Existing nutrition inputs
     const nutritionInputs = this.nutritionInputs(existingNutrition);
 
+    // Tipo de comida
+    const tipos = [
+      { v: 'almuerzo', l: T.filter.almuerzo },
+      { v: 'cena',     l: T.filter.cena },
+      { v: 'ambos',    l: T.filter.all },
+    ];
+    const tipoRadios = tipos.map(t => `
+      <label class="radio-pill">
+        <input type="radio" name="tipoComida" value="${t.v}" ${existingTipo === t.v ? 'checked' : ''}>
+        <span>${t.l}</span>
+      </label>
+    `).join('');
+
     return `
       <form id="recipe-form" class="recipe-form">
         <input type="hidden" name="id" value="${recipe?.id || ''}">
-        
+
         <div class="form-group">
           <label class="form-label">${T.recipe.recipeName}</label>
-          <input type="text" name="nombre" class="form-input" 
-                 value="${name}" required 
+          <input type="text" name="nombre" class="form-input"
+                 value="${name}" required
                  placeholder="${T.recipe.namePlaceholder}">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Imagen</label>
+          <div class="image-field">
+            <div class="image-field__preview" id="img-preview">
+              ${existingImg ? `<img src="${existingImg}" alt="">` : '<span class="image-field__placeholder">🍽️</span>'}
+            </div>
+            <div class="image-field__controls">
+              <input type="file" id="img-file" accept="image/*" capture="environment"
+                     style="display:none" onchange="Components.handleImageUpload(this)">
+              <button type="button" class="btn btn--outline btn--sm"
+                      onclick="document.getElementById('img-file').click()">
+                📷 Subir foto
+              </button>
+              <button type="button" class="btn btn--ghost btn--sm"
+                      onclick="Components.clearImage()">
+                Quitar
+              </button>
+              <input type="url" name="imagen" id="img-url" class="form-input"
+                     value="${existingImg}" placeholder="o pegá una URL"
+                     style="margin-top: 8px;"
+                     oninput="Components.previewImageUrl(this.value)">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Tags (separados por coma)</label>
+          <input type="text" name="tags" class="form-input"
+                 value="${this.escapeHtml(existingTags)}"
+                 placeholder="ej: italiana, rápida, vegetariana">
+          <div class="form-hint">Categorías que se muestran en la lista y se usan para filtrar.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Tipo de comida</label>
+          <div class="radio-pills">${tipoRadios}</div>
         </div>
 
         <div class="form-group">
@@ -214,7 +274,7 @@ const Components = {
           <div id="ingredients-list" class="dynamic-list">
             ${ingredients.join('')}
           </div>
-          <button type="button" class="btn btn--outline btn--sm dynamic-list__add" 
+          <button type="button" class="btn btn--outline btn--sm dynamic-list__add"
                   onclick="Components.addIngredient()">
             ${T.recipe.addIngredient}
           </button>
@@ -225,7 +285,7 @@ const Components = {
           <div id="steps-list" class="dynamic-list recipe-detail__steps">
             ${steps.join('')}
           </div>
-          <button type="button" class="btn btn--outline btn--sm dynamic-list__add" 
+          <button type="button" class="btn btn--outline btn--sm dynamic-list__add"
                   onclick="Components.addStep()">
             ${T.recipe.addStep}
           </button>
@@ -236,7 +296,7 @@ const Components = {
           <div id="nutrition-manual">
             ${nutritionInputs}
           </div>
-          <button type="button" class="btn btn--secondary btn--sm mt-md" 
+          <button type="button" class="btn btn--secondary btn--sm mt-md"
                   onclick="Components.buscarNutrientes()">
             ${T.recipe.buscarNutrientes}
           </button>
@@ -440,6 +500,88 @@ const Components = {
         item.querySelector('.step-number').textContent = i + 1;
       });
     }
+  },
+
+  // ============================================
+  // Image handling
+  // ============================================
+  previewImageUrl(url) {
+    const preview = document.getElementById('img-preview');
+    if (!preview) return;
+    if (url && /^https?:\/\//.test(url)) {
+      preview.innerHTML = `<img src="${this.escapeHtml(url)}" alt="">`;
+    } else if (!url) {
+      preview.innerHTML = '<span class="image-field__placeholder">🍽️</span>';
+    }
+  },
+
+  clearImage() {
+    const preview = document.getElementById('img-preview');
+    const urlInput = document.getElementById('img-url');
+    const fileInput = document.getElementById('img-file');
+    if (preview) preview.innerHTML = '<span class="image-field__placeholder">🍽️</span>';
+    if (urlInput) urlInput.value = '';
+    if (fileInput) fileInput.value = '';
+  },
+
+  async handleImageUpload(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+
+    // Preview local mientras sube
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const preview = document.getElementById('img-preview');
+      if (preview) preview.innerHTML = `<img src="${e.target.result}" alt="">`;
+    };
+    reader.readAsDataURL(file);
+
+    this.toast.show('Subiendo imagen...');
+
+    try {
+      // Subir a Supabase Storage (la anon key tiene policy permisiva en recipe-images)
+      const url = await this.uploadToStorage(file);
+      if (url) {
+        const urlInput = document.getElementById('img-url');
+        if (urlInput) urlInput.value = url;
+        const preview = document.getElementById('img-preview');
+        if (preview) preview.innerHTML = `<img src="${url}" alt="">`;
+        this.toast.show('✅ Imagen subida');
+      } else {
+        this.toast.show('❌ Error subiendo imagen');
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      this.toast.show('❌ Error: ' + (err.message || err));
+    }
+  },
+
+  async uploadToStorage(file) {
+    const SUPABASE_URL = (typeof DB !== 'undefined' && DB.SUPABASE_URL) || 'https://flpxuyrtdmkqzzdcjqbr.supabase.co';
+    const SUPABASE_KEY = (typeof DB !== 'undefined' && DB.SUPABASE_KEY) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZscHh1eXJ0ZG1rcXp6ZGNqcWJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5NzE1MDcsImV4cCI6MjEwNDU0NzUwN30.dA9CmjXMkduZjDPUZw29IDPG3lPiSn-BrH3neGEzDxw';
+    const BUCKET = 'recipe-images';
+
+    const ext = (file.name.match(/\.[a-zA-Z0-9]+$/) || ['.jpg'])[0];
+    const remoteName = `recetas/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${SUPABASE_URL}/storage/v1/object/${BUCKET}/${remoteName}`);
+      xhr.setRequestHeader('apikey', SUPABASE_KEY);
+      xhr.setRequestHeader('Authorization', `Bearer ${SUPABASE_KEY}`);
+      xhr.setRequestHeader('Content-Type', file.type || 'image/jpeg');
+      xhr.setRequestHeader('x-upsert', 'true');
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(`${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${remoteName}`);
+        } else {
+          console.error('Storage upload failed:', xhr.status, xhr.responseText);
+          reject(new Error(`HTTP ${xhr.status}`));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Network error'));
+      xhr.send(file);
+    });
   },
 
   async buscarNutrientes() {

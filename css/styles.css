@@ -518,6 +518,15 @@ select.form-input {
   flex-shrink: 0;
 }
 
+.recipe-card__img {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--color-accent);
+}
+
 .recipe-card__info {
   flex: 1;
   min-width: 0;
@@ -703,6 +712,17 @@ select.form-input {
   justify-content: center;
   font-size: 40px;
   margin: 0 auto var(--space-md);
+}
+
+.recipe-detail__hero {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 16 / 10;
+  margin: 0 auto var(--space-md);
+  border-radius: var(--radius-lg);
+  object-fit: cover;
+  background: var(--color-accent);
 }
 
 .recipe-detail__name {
@@ -1019,4 +1039,92 @@ select.form-input {
   .header, .nav-tabs {
     display: none;
   }
+}
+
+/* === Image field (recipe form) === */
+.image-field {
+  display: flex;
+  gap: var(--space-md);
+  align-items: flex-start;
+}
+
+.image-field__preview {
+  width: 96px;
+  height: 96px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.image-field__preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-field__placeholder {
+  font-size: 36px;
+  opacity: 0.6;
+}
+
+.image-field__controls {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.image-field__controls .form-input {
+  font-size: var(--font-size-sm);
+}
+
+/* === Radio pills (tipo de comida) === */
+.radio-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.radio-pill {
+  flex: 1;
+  min-width: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 12px;
+  background: var(--color-background);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  transition: all 0.15s;
+}
+
+.radio-pill input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.radio-pill:has(input:checked) {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.radio-pill:active {
+  transform: scale(0.97);
+}
+
+/* === Form hint === */
+.form-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-top: 4px;
+  line-height: 1.4;
 }
