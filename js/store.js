@@ -20,10 +20,20 @@ const Store = {
     }
   },
 
-  // Set item in localStorage
+  // Sync hooks (registered by db.js). Allows Store.set to fan out changes
+  // to Supabase without coupling Store to db.js directly.
+  registerSyncHook(key, fn) {
+    if (!this._syncHooks) this._syncHooks = {};
+    this._syncHooks[key] = fn;
+  },
+
+  // Set item in localStorage + fire any registered sync hook
   set(key, value) {
     try {
       localStorage.setItem(key, JSON.stringify(value));
+      if (this._syncHooks && this._syncHooks[key]) {
+        this._syncHooks[key](value);
+      }
       return true;
     } catch (e) {
       console.error(`Store.set error: ${key}`, e);

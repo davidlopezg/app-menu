@@ -11,18 +11,23 @@ const App = {
   // Initialize
   // ============================================
   async init() {
-    // Init modules
+    // Init modules (from localStorage — instant)
     Recipes.init();
     Menu.init();
 
-    // Try to sync from GitHub (María will get David's data)
-    await Sync.load();
+    // Supabase: setup + (if auth) pullAll + subscribe
+    await DB.init();
 
-    // Setup event listeners
     this._setupEventListeners();
 
-    // Handle hash routing
-    this._handleRoute();
+    // If not signed in, show login view (DB.onAuthStateChange will redirect when ready)
+    const { data: { session } } = await DB.client.auth.getSession();
+    if (session) {
+      this._handleRoute();
+    } else {
+      this.currentView = 'signin';
+      this.renderSignInView();
+    }
 
     // Listen for hash changes
     window.addEventListener('hashchange', () => this._handleRoute());
@@ -199,7 +204,7 @@ const App = {
   },
 
   showSettings() {
-    Components.modal.open('⚙️ Ajustes', Sync.renderSettings());
+    Components.modal.open('⚙️ Ajustes', DB.renderSettings());
   },
 
   showShoppingList() {
