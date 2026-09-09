@@ -347,17 +347,39 @@ const DB = {
         <div class="card" style="margin-top: 16px;">
           <h3 style="margin-bottom: 8px;">🤖 Agente IA</h3>
           <p style="color: var(--color-text-muted); font-size: 13px; margin-bottom: 12px;">
-            Pegá tu API key de MiniMax para usar el agente. Se guarda solo en tu navegador.
+            Configurá tu proveedor y API key. Se guarda solo en tu navegador.
           </p>
+
+          <label style="font-size: 13px; color: var(--color-text-muted);">Proveedor</label>
+          <select id="ai-provider" class="form-input" onchange="DB.onProviderChange()"
+                  style="margin-bottom: 12px;">
+            ${Object.entries(AI.PROVIDERS).map(([k, p]) => `
+              <option value="${k}" ${AI.provider === k ? 'selected' : ''}>${p.name}</option>
+            `).join('')}
+          </select>
+
+          <label style="font-size: 13px; color: var(--color-text-muted);">Endpoint URL</label>
+          <input type="text" id="ai-endpoint" class="form-input"
+                 placeholder="https://api.openai.com/v1/chat/completions"
+                 value="${AI.endpoint || ''}" style="margin-bottom: 8px;">
+
+          <label style="font-size: 13px; color: var(--color-text-muted);">Modelo</label>
+          <input type="text" id="ai-model" class="form-input"
+                 placeholder="gpt-4o-mini"
+                 value="${AI.model || ''}" style="margin-bottom: 12px;">
+
+          <label style="font-size: 13px; color: var(--color-text-muted);">API Key</label>
           <input type="password" id="ai-key-input" class="form-input"
-                 placeholder="eyJ..." autocomplete="off"
-                 value="${AI.hasKey() ? '••••••••' + AI.key.slice(-8) : ''}">
-          <div style="display: flex; gap: 8px; margin-top: 12px;">
-            <button class="btn btn--primary btn--sm" onclick="DB.saveAiKey()">
-              Guardar
+                 placeholder="sk-..." autocomplete="off"
+                 value="${AI.hasKey() ? '••••••••' + AI.key.slice(-8) : ''}"
+                 style="margin-bottom: 12px;">
+
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn btn--primary btn--sm" onclick="DB.saveAiConfig()">
+              Guardar todo
             </button>
-            <button class="btn btn--ghost btn--sm" onclick="DB.clearAiKey()">
-              Borrar
+            <button class="btn btn--ghost btn--sm" onclick="DB.clearAiConfig()">
+              Borrar todo
             </button>
             <button class="btn btn--outline btn--sm" onclick="DB.testAiKey()">
               Probar
@@ -421,32 +443,62 @@ const DB = {
   },
 
   // ============================================
-  // AI key management
+  // AI key + config management
   // ============================================
-  saveAiKey() {
-    const input = document.getElementById('ai-key-input');
-    if (!input) return;
-    const val = input.value.trim();
-    if (!val) {
-      this._aiStatus('⚠️ Pegá una key primero', 'warn');
-      return;
+  onProviderChange() {
+    const sel = document.getElementById('ai-provider');
+    const ep = document.getElementById('ai-endpoint');
+    const md = document.getElementById('ai-model');
+    if (!sel || !ep || !md) return;
+    const prov = AI.PROVIDERS[sel.value];
+    if (prov && sel.value !== 'custom') {
+      ep.value = prov.endpoint;
+      md.value = prov.model;
+    } else {
+      ep.value = '';
+      md.value = '';
     }
-    // Si el usuario solo dejo los dots sin cambiarlos, mantener la key actual
-    if (val.startsWith('••')) {
-      this._aiStatus('✅ Key sin cambios', 'ok');
-      return;
-    }
-    AI.setKey(val);
-    // Mostrar la key enmascarada
-    input.value = '••••••••' + AI.key.slice(-8);
-    this._aiStatus('✅ Key guardada en este navegador', 'ok');
+    // Guardar config al cambiar provider
+    AI.setConfig(sel.value, ep.value, md.value);
+    this._aiStatus('Proveedor cambiado (key sin tocar)', 'ok');
   },
 
-  clearAiKey() {
+  saveAiConfig() {
+    const prov = document.getElementById('ai-provider')?.value || 'custom';
+    const ep = document.getElementById('ai-endpoint')?.value.trim();
+    const md = document.getElementById('ai-model')?.value.trim();
+    const keyInput = document.getElementById('ai-key-input');
+    const keyVal = keyInput?.value.trim();
+
+    if (!ep || !md) {
+      this._aiStatus('⚠️ Endpoint y modelo son obligatorios', 'warn');
+      return;
+    }
+
+    // Guardar config
+    AI.setConfig(prov, ep, md);
+
+    // Guardar key solo si la cambiaron (no son solo dots)
+    if (keyVal && !keyVal.startsWith('••')) {
+      AI.setKey(keyVal);
+      if (keyInput) keyInput.value = '••••••••' + AI.key.slice(-8);
+    }
+
+    this._aiStatus(AI.hasKey() ? '✅ Todo guardado' : '⚠️ Falta la API key', AI.hasKey() ? 'ok' : 'warn');
+  },
+
+  clearAiConfig() {
     AI.setKey('');
-    const input = document.getElementById('ai-key-input');
-    if (input) input.value = '';
-    this._aiStatus('🗑️ Key borrada', 'ok');
+    AI.setConfig('openai', AI.PROVIDERS.openai.endpoint, AI.PROVIDERS.openai.model);
+    const sel = document.getElementById('ai-provider');
+    const ep = document.getElementById('ai-endpoint');
+    const md = document.getElementById('ai-model');
+    const key = document.getElementById('ai-key-input');
+    if (sel) sel.value = 'openai';
+    if (ep) ep.value = AI.PROVIDERS.openai.endpoint;
+    if (md) md.value = AI.PROVIDERS.openai.model;
+    if (key) key.value = '';
+    this._aiStatus('🗑️ Todo borrado. Volvió a defaults.', 'ok');
   },
 
   async testAiKey() {

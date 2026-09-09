@@ -6,8 +6,17 @@
 
 const AI = {
   STORAGE_KEY: 'menuapp_ai_key',
-  ENDPOINT: 'https://api.minimaxi.com/v1/chat/completions',
-  MODEL: 'MiniMax-Text-01',
+  CFG_KEY: 'menuapp_ai_cfg',
+
+  // Providers conocidos (el usuario puede editar el endpoint y modelo manualmente)
+  PROVIDERS: {
+    'openai':     { endpoint: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini',                 name: 'OpenAI' },
+    'minimax':    { endpoint: 'https://api.minimaxi.com/v1/chat/completions', model: 'MiniMax-Text-01',           name: 'MiniMax' },
+    'mistral':    { endpoint: 'https://api.mistral.ai/v1/chat/completions',   model: 'mistral-small-latest',       name: 'Mistral' },
+    'groq':       { endpoint: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.1-8b-instant',  name: 'Groq (Llama)' },
+    'openrouter': { endpoint: 'https://openrouter.ai/api/v1/chat/completions', model: 'openai/gpt-4o-mini',       name: 'OpenRouter' },
+    'custom':     { endpoint: '', model: '',                                       name: 'Personalizado' },
+  },
 
   systemPromptRecipe: `Eres un asistente culinario experto en cocina mediterránea y española.
 Cuando recibas el nombre de una receta, devuelve SOLO un objeto JSON válido (sin markdown, sin explicaciones) con esta estructura exacta:
@@ -57,8 +66,29 @@ Reglas:
 
   // Estado
   key: '',
+  endpoint: '',
+  model: '',
+  provider: 'openai',
+
   init() {
     this.key = localStorage.getItem(this.STORAGE_KEY) || '';
+    try {
+      const cfg = JSON.parse(localStorage.getItem(this.CFG_KEY) || 'null');
+      if (cfg) {
+        this.endpoint = cfg.endpoint || this.PROVIDERS.openai.endpoint;
+        this.model = cfg.model || this.PROVIDERS.openai.model;
+        this.provider = cfg.provider || 'openai';
+      } else {
+        // Defaults: OpenAI (el mas usado)
+        this.endpoint = this.PROVIDERS.openai.endpoint;
+        this.model = this.PROVIDERS.openai.model;
+        this.provider = 'openai';
+      }
+    } catch {
+      this.endpoint = this.PROVIDERS.openai.endpoint;
+      this.model = this.PROVIDERS.openai.model;
+      this.provider = 'openai';
+    }
   },
 
   setKey(k) {
@@ -67,8 +97,19 @@ Reglas:
     else localStorage.removeItem(this.STORAGE_KEY);
   },
 
+  setConfig(provider, endpoint, model) {
+    this.provider = provider;
+    this.endpoint = (endpoint || '').trim();
+    this.model = (model || '').trim();
+    localStorage.setItem(this.CFG_KEY, JSON.stringify({
+      provider: this.provider,
+      endpoint: this.endpoint,
+      model: this.model,
+    }));
+  },
+
   hasKey() {
-    return !!this.key;
+    return !!this.key && !!this.endpoint && !!this.model;
   },
 
   // ============================================
@@ -76,26 +117,41 @@ Reglas:
   // ============================================
   async call(messages, opts = {}) {
     if (!this.key) throw new Error('API key no configurada. Andá a Ajustes.');
+    if (!this.endpoint) throw new Error('Endpoint no configurado. Andá a Ajustes.');
+    if (!this.model) throw new Error('Modelo no configurado. Andá a Ajustes.');
 
     const body = {
-      model: this.MODEL,
+      model: this.model,
       messages,
       temperature: opts.temperature ?? 0.6,
     };
-    if (opts.json) body.response_format = { type: 'json_object' };
+    // Algunos providers no soportan response_format
+    if (opts.json && this.provider !== 'custom') {
+      body.response_format = { type: 'json_object' };
+    }
 
-    const res = await fetch(this.ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.key}`,
-      },
-      body: JSON.stringify(body),
-    });
+    let res;
+    try {
+      res = await fetch(this.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.key}`,
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      throw new Error('Error de red: ' + (e.message || e) + '. ¿Endpoint correcto?');
+    }
 
     if (!res.ok) {
       const txt = await res.text().catch(() => '');
-      throw new Error(`API ${res.status}: ${txt.slice(0, 200)}`);
+      let msg = '';
+      if (res.status === 401) msg = '401 Unauthorized: key inválida o endpoint incorrecto';
+      else if (res.status === 404) msg = '404 Not Found: el endpoint no existe (¿URL mal?)';
+      else if (res.status === 429) msg = '429 Too Many Requests: rate limit alcanzado';
+      else msg = `${res.status}: ${txt.slice(0, 200)}`;
+      throw new Error(msg);
     }
 
     const data = await res.json();
