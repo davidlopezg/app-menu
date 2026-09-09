@@ -962,6 +962,49 @@ select.form-input {
   }
 }
 
+/* === Sign In === */
+.signin-view {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100dvh - var(--header-height) - var(--safe-bottom));
+  padding: var(--space-lg) var(--space-md);
+}
+
+.signin-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-xl) var(--space-lg);
+  text-align: center;
+}
+
+.signin-card__icon {
+  font-size: 56px;
+  line-height: 1;
+  margin-bottom: var(--space-md);
+}
+
+.signin-card__title {
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  color: var(--color-primary-dark);
+  margin-bottom: var(--space-sm);
+}
+
+.signin-card__hint {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--space-lg);
+  line-height: 1.45;
+}
+
+.signin-card .form-input {
+  margin-bottom: var(--space-md);
+}
+
 /* === Sync Settings === */
 .sync-settings {
   padding: var(--space-sm);

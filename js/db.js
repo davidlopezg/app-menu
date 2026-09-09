@@ -21,12 +21,17 @@ const DB = {
   // ============================================
   async init() {
     if (!window.supabase) {
-      console.error('Supabase SDK not loaded');
+      console.error('Supabase SDK not loaded — ¿falló la CDN?');
       return false;
     }
-    this.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: true, autoRefreshToken: true }
-    });
+    try {
+      this.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { persistSession: true, autoRefreshToken: true }
+      });
+    } catch (err) {
+      console.error('Error creando cliente Supabase:', err);
+      return false;
+    }
 
     // Procesar magic-link callback si la URL trae ?code= o #access_token=
     const { data: { session } } = await this.client.auth.getSession();
@@ -48,7 +53,10 @@ const DB = {
         if (typeof Recipes !== 'undefined') Recipes._recipes = null;
         if (typeof Menu !== 'undefined')      Menu._menu = null;
         this._unsubscribe();
-        if (typeof App !== 'undefined') App.renderSignInView();
+        if (typeof App !== 'undefined') {
+          App.currentView = 'signin';
+          DB.renderSignInView();
+        }
       }
     });
 
@@ -90,6 +98,17 @@ const DB = {
 
   isAuth() {
     return !!(this.client && this.client.auth.getSession);
+  },
+
+  // ¿Hay sesión activa? (sin red, usa cache local)
+  async _isAuthed() {
+    if (!this.client) return false;
+    try {
+      const { data: { session } } = await this.client.auth.getSession();
+      return !!session;
+    } catch {
+      return false;
+    }
   },
 
   async getUserEmail() {
@@ -147,6 +166,7 @@ const DB = {
   // ============================================
   async pushRecipes(recipes) {
     if (!this.client || this._pulling) return;
+    if (!this._isAuthed()) return;
     if (!recipes || recipes.length === 0) return;
     const rows = recipes.map(r => ({
       id: r.id,
@@ -166,6 +186,7 @@ const DB = {
 
   async pushMenu(menu) {
     if (!this.client || this._pulling) return;
+    if (!this._isAuthed()) return;
     const rows = Object.entries(menu).map(([week_key, data]) => ({
       week_key,
       data,

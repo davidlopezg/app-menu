@@ -21,12 +21,16 @@ const App = {
     this._setupEventListeners();
 
     // If not signed in, show login view (DB.onAuthStateChange will redirect when ready)
+    if (!DB.client) {
+      console.error('DB no inicializado — no se puede continuar');
+      return;
+    }
     const { data: { session } } = await DB.client.auth.getSession();
     if (session) {
       this._handleRoute();
     } else {
       this.currentView = 'signin';
-      this.renderSignInView();
+      DB.renderSignInView();
     }
 
     // Listen for hash changes
