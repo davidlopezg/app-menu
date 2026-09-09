@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v6.1 (2025-09-09)',
+  VERSION: 'v8 (2025-09-09)',
 
   // ============================================
   // Initialize
@@ -389,7 +389,7 @@ const App = {
           </svg>
           ${T.actions.delete}
         </button>
-        <button class="btn btn--primary" onclick="App.navigate('recipe', { id: '${id}' })">
+        <button class="btn btn--primary" onclick="App.editRecipe('${id}')">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
             <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -579,6 +579,20 @@ const App = {
   // ============================================
   // Recipe Actions
   // ============================================
+  // Abre el form de edición dentro de un modal (mejor UX que cambiar de pagina)
+  editRecipe(id) {
+    const recipe = Recipes.getById(id);
+    if (!recipe) {
+      Components.toast.show(T.toast.error || 'Receta no encontrada');
+      return;
+    }
+    Components.modal.open(T.recipe.editRecipe, Components.recipeForm(recipe, true));
+    document.getElementById('recipe-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.saveRecipe(true);
+    });
+  },
+
   saveRecipe(isEdit = false) {
     const form = document.getElementById('recipe-form');
     
@@ -645,7 +659,13 @@ const App = {
 
     Components.toast.show(T.toast.recipeSaved);
     Components.modal.close();
-    this.navigate('recipes');
+    // Si estabamos editando, refrescar el detalle con los nuevos datos.
+    // Si era nueva, ir a la lista de recetas.
+    if (id) {
+      this.renderRecipeDetail(id);
+    } else {
+      this.navigate('recipes');
+    }
   },
 
   deleteRecipe(id) {
