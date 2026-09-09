@@ -364,6 +364,16 @@ const App = {
         </ol>
       </div>
 
+      ${recipe.link ? `
+      <div class="card recipe-detail__section recipe-detail__link">
+        <a href="${Components.escapeHtml(recipe.link)}" target="_blank" rel="noopener noreferrer" class="recipe-link-btn">
+          🔗 Ver receta original
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/>
+          </svg>
+        </a>
+      </div>` : ''}
+
       <div class="form-actions">
         <button class="btn btn--outline" onclick="App.deleteRecipe('${id}')">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -615,6 +625,7 @@ const App = {
               .split(',')
               .map(t => t.trim().toLowerCase())
               .filter(Boolean),
+      link: (form.querySelector('[name="link"]')?.value || '').trim(),
     };
 
     if (isEdit && id) {

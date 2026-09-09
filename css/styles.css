@@ -1128,3 +1128,31 @@ select.form-input {
   margin-top: 4px;
   line-height: 1.4;
 }
+
+/* === Recipe external link === */
+.recipe-detail__link {
+  padding: 0;
+  overflow: hidden;
+}
+
+.recipe-link-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: var(--space-md) var(--space-lg);
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: none;
+  background: var(--color-accent);
+  transition: background 0.15s;
+}
+
+.recipe-link-btn:active {
+  background: var(--color-secondary);
+  color: white;
+}
+
+.recipe-link-btn svg {
+  flex-shrink: 0;
+}

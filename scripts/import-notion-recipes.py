@@ -394,6 +394,7 @@ def main():
             'tipo_comida': map_tipo_comida(tags),
             'imagen': img_url,
             'tags': tags,
+            'link': meta.get('link', ''),
             'fecha_creacion': '2025-09-09T00:00:00Z',
         }
         rows.append(row)

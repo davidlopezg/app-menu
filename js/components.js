@@ -193,6 +193,7 @@ const Components = {
     const existingTags = recipe && recipe.tags ? recipe.tags.join(', ') : '';
     const existingTipo = recipe ? (recipe.tipoComida || 'ambos') : 'ambos';
     const existingImg = recipe && recipe.imagen ? this.escapeHtml(recipe.imagen) : '';
+    const existingLink = recipe && recipe.link ? this.escapeHtml(recipe.link) : '';
 
     // Ingredients
     const ingredients = recipe && recipe.ingredientes.length > 0
@@ -262,6 +263,14 @@ const Components = {
                  value="${this.escapeHtml(existingTags)}"
                  placeholder="ej: italiana, rápida, vegetariana">
           <div class="form-hint">Categorías que se muestran en la lista y se usan para filtrar.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Enlace (receta original)</label>
+          <input type="url" name="link" class="form-input"
+                 value="${existingLink}"
+                 placeholder="https://www.ejemplo.com/receta">
+          <div class="form-hint">Link al blog, video o receta original.</div>
         </div>
 
         <div class="form-group">
