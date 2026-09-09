@@ -343,6 +343,28 @@ const DB = {
             🔄 Buscar actualizaciones
           </button>
         </div>
+
+        <div class="card" style="margin-top: 16px;">
+          <h3 style="margin-bottom: 8px;">🤖 Agente IA</h3>
+          <p style="color: var(--color-text-muted); font-size: 13px; margin-bottom: 12px;">
+            Pegá tu API key de MiniMax para usar el agente. Se guarda solo en tu navegador.
+          </p>
+          <input type="password" id="ai-key-input" class="form-input"
+                 placeholder="eyJ..." autocomplete="off"
+                 value="${AI.hasKey() ? '••••••••' + AI.key.slice(-8) : ''}">
+          <div style="display: flex; gap: 8px; margin-top: 12px;">
+            <button class="btn btn--primary btn--sm" onclick="DB.saveAiKey()">
+              Guardar
+            </button>
+            <button class="btn btn--ghost btn--sm" onclick="DB.clearAiKey()">
+              Borrar
+            </button>
+            <button class="btn btn--outline btn--sm" onclick="DB.testAiKey()">
+              Probar
+            </button>
+          </div>
+          <p id="ai-status" style="font-size: 12px; margin-top: 12px;"></p>
+        </div>
       </div>
     `;
   },
@@ -396,5 +418,59 @@ const DB = {
       console.error(err);
       Components.toast.show('Error: ' + err.message);
     }
+  },
+
+  // ============================================
+  // AI key management
+  // ============================================
+  saveAiKey() {
+    const input = document.getElementById('ai-key-input');
+    if (!input) return;
+    const val = input.value.trim();
+    if (!val) {
+      this._aiStatus('⚠️ Pegá una key primero', 'warn');
+      return;
+    }
+    // Si el usuario solo dejo los dots sin cambiarlos, mantener la key actual
+    if (val.startsWith('••')) {
+      this._aiStatus('✅ Key sin cambios', 'ok');
+      return;
+    }
+    AI.setKey(val);
+    // Mostrar la key enmascarada
+    input.value = '••••••••' + AI.key.slice(-8);
+    this._aiStatus('✅ Key guardada en este navegador', 'ok');
+  },
+
+  clearAiKey() {
+    AI.setKey('');
+    const input = document.getElementById('ai-key-input');
+    if (input) input.value = '';
+    this._aiStatus('🗑️ Key borrada', 'ok');
+  },
+
+  async testAiKey() {
+    if (!AI.hasKey()) {
+      this._aiStatus('⚠️ No hay key guardada', 'warn');
+      return;
+    }
+    this._aiStatus('⏳ Probando...', 'pending');
+    try {
+      const text = await AI.call([
+        { role: 'system', content: 'Responde SOLO con JSON: {"ok": true}' },
+        { role: 'user', content: 'ok?' },
+      ], { json: true });
+      this._aiStatus('✅ Key funciona. Respuesta: ' + text.slice(0, 80), 'ok');
+    } catch (err) {
+      this._aiStatus('❌ ' + err.message, 'error');
+    }
+  },
+
+  _aiStatus(msg, kind) {
+    const el = document.getElementById('ai-status');
+    if (!el) return;
+    el.textContent = msg;
+    const colors = { ok: '#28a745', warn: '#ffc107', error: '#dc3545', pending: '#666' };
+    el.style.color = colors[kind] || colors.pending;
   }
 };

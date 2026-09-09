@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v9 (2025-09-09)',
+  VERSION: 'v10 (2025-09-09)',
 
   // ============================================
   // Initialize
@@ -18,6 +18,7 @@ const App = {
     // Init modules (from localStorage — instant)
     Recipes.init();
     Menu.init();
+    if (typeof AI !== 'undefined') AI.init();
 
     this._setupEventListeners();
 
@@ -218,6 +219,177 @@ const App = {
     // Click handlers for meal cells
     main.innerHTML = html;
     this._attachMealCellListeners();
+
+    // Botón flotante del chat IA
+    this._renderChatButton();
+  },
+
+  // Botón flotante que abre el chat IA
+  _renderChatButton() {
+    // Quitar uno previo si existe
+    const existing = document.getElementById('ai-chat-fab');
+    if (existing) existing.remove();
+
+    const fab = document.createElement('button');
+    fab.id = 'ai-chat-fab';
+    fab.className = 'ai-chat-fab';
+    fab.innerHTML = '🤖';
+    fab.title = 'Chat con agente IA';
+    fab.onclick = () => App.openAiChat();
+    document.body.appendChild(fab);
+  },
+
+  // Abre el chat IA en un modal
+  async openAiChat() {
+    if (!AI.hasKey()) {
+      Components.toast.show('Configurá tu API key en Ajustes → 🤖 Agente IA');
+      return;
+    }
+
+    // Modal con la UI del chat
+    Components.modal.open('🤖 Agente IA', `
+      <div class="ai-chat">
+        <div class="ai-chat__messages" id="ai-chat-messages">
+          <div class="ai-chat__msg ai-chat__msg--agent">
+            Hola! Puedo sugerirte un menú para la semana. Decime qué tipo de cocina te gusta, cuántos días, si querés cenas light, etc.
+          </div>
+        </div>
+        <div class="ai-chat__input-wrap">
+          <input type="text" id="ai-chat-input" class="form-input"
+                 placeholder="Ej: Menu ligero para 3 días, cenas sin carbos..."
+                 onkeydown="if(event.key==='Enter') App.sendAiMessage()">
+          <button class="btn btn--primary" onclick="App.sendAiMessage()">Enviar</button>
+        </div>
+      </div>
+    `);
+
+    // Focus en el input
+    setTimeout(() => document.getElementById('ai-chat-input')?.focus(), 200);
+  },
+
+  async sendAiMessage() {
+    const input = document.getElementById('ai-chat-input');
+    const msgEl = document.getElementById('ai-chat-messages');
+    if (!input || !msgEl) return;
+    const text = input.value.trim();
+    if (!text) return;
+
+    // Pintar mensaje del usuario
+    msgEl.insertAdjacentHTML('beforeend', `
+      <div class="ai-chat__msg ai-chat__msg--user">${Components.escapeHtml(text)}</div>
+    `);
+    input.value = '';
+    msgEl.scrollTop = msgEl.scrollHeight;
+
+    // Indicador "pensando"
+    const thinkingId = 'ai-thinking-' + Date.now();
+    msgEl.insertAdjacentHTML('beforeend', `
+      <div class="ai-chat__msg ai-chat__msg--agent" id="${thinkingId}">
+        <span class="ai-spinner ai-spinner--inline"></span> Pensando...
+      </div>
+    `);
+    msgEl.scrollTop = msgEl.scrollHeight;
+
+    try {
+      const result = await AI.chatMenu(text, {
+        recipes: Recipes.getAll().map(r => ({
+          nombre: r.nombre,
+          tipo_comida: r.tipoComida,
+        })),
+        currentMenu: Menu.getCurrentWeek(),
+      });
+
+      // Reemplazar el "pensando" con la respuesta
+      const thinking = document.getElementById(thinkingId);
+      if (thinking) thinking.remove();
+
+      // Si hay menu propuesto, pintarlo como una card con botón Aplicar
+      let menuCardHtml = '';
+      if (result.menu_propuesto && typeof result.menu_propuesto === 'object') {
+        const mp = result.menu_propuesto;
+        const days = [['lunes','Lun'],['martes','Mar'],['miercoles','Mié'],['jueves','Jue'],['viernes','Vie'],['sabado','Sáb'],['domingo','Dom']];
+        const rows = days.map(([k, label]) => {
+          const d = mp[k];
+          if (!d) return '';
+          const c = d.comida ? `<strong>Comida:</strong> ${Components.escapeHtml(d.comida)}` : '';
+          const ce = d.cena ? `<strong>Cena:</strong> ${Components.escapeHtml(d.cena)}` : '';
+          return `<div class="ai-chat__menu-row"><span class="ai-chat__menu-day">${label}</span><span>${c}${c && ce ? ' · ' : ''}${ce}</span></div>`;
+        }).filter(Boolean).join('');
+
+        if (rows) {
+          menuCardHtml = `
+            <div class="ai-chat__menu-card">
+              <div style="font-weight:600; margin-bottom: 8px;">📋 Propuesta de menú</div>
+              ${rows}
+              <button class="btn btn--primary btn--sm" style="margin-top: 12px; width: 100%;"
+                      onclick='App.applyAiMenu(${JSON.stringify(mp).replace(/'/g, "&apos;")})'>
+                💾 Aplicar este menú a esta semana
+              </button>
+            </div>`;
+        }
+      }
+
+      msgEl.insertAdjacentHTML('beforeend', `
+        <div class="ai-chat__msg ai-chat__msg--agent">
+          ${Components.escapeHtml(result.respuesta || '(sin respuesta)')}
+          ${menuCardHtml}
+        </div>
+      `);
+      msgEl.scrollTop = msgEl.scrollHeight;
+    } catch (err) {
+      const thinking = document.getElementById(thinkingId);
+      if (thinking) thinking.remove();
+      msgEl.insertAdjacentHTML('beforeend', `
+        <div class="ai-chat__msg ai-chat__msg--agent" style="color: var(--color-error);">
+          ❌ ${Components.escapeHtml(err.message)}
+        </div>
+      `);
+      msgEl.scrollTop = msgEl.scrollHeight;
+    }
+  },
+
+  // Aplica un menu propuesto por la IA a la semana actual
+  async applyAiMenu(menuPropuesto) {
+    // menuPropuesto viene como {lunes: {comida, cena}, ...}
+    // Necesito mapear a {monday: {lunch, dinner}, ...} y resolver IDs
+    const dayMap = {
+      lunes: 'monday', martes: 'tuesday', miercoles: 'wednesday',
+      jueves: 'thursday', viernes: 'friday', sabado: 'saturday', domingo: 'sunday',
+    };
+    const menuData = {};
+    let found = 0, missing = [];
+
+    for (const [esDay, enDay] of Object.entries(dayMap)) {
+      const day = menuPropuesto[esDay];
+      if (!day) continue;
+      menuData[enDay] = { lunch: null, dinner: null };
+
+      if (day.comida) {
+        const r = Recipes.getAll().find(x => x.nombre.toLowerCase() === day.comida.toLowerCase());
+        if (r) { menuData[enDay].lunch = r.id; found++; }
+        else missing.push(`${esDay} comida: ${day.comida}`);
+      }
+      if (day.cena) {
+        const r = Recipes.getAll().find(x => x.nombre.toLowerCase() === day.cena.toLowerCase());
+        if (r) { menuData[enDay].dinner = r.id; found++; }
+        else missing.push(`${esDay} cena: ${day.cena}`);
+      }
+    }
+
+    if (missing.length > 0) {
+      Components.toast.show(`⚠️ ${missing.length} recetas no encontradas: ${missing.slice(0,2).join(', ')}${missing.length>2?'...':''}`);
+    }
+
+    // Guardar directamente en Supabase via DB.pushMenu (que ya existe)
+    const currentMenu = Menu._menu || {};
+    const wk = Menu.getWeekKey();
+    currentMenu[wk] = menuData;
+    await DB.pushMenu(currentMenu);
+    Menu._menu = currentMenu;
+
+    Components.toast.show(`✅ Menú aplicado (${found} celdas)`);
+    Components.modal.close();
+    App.renderMenuView();
   },
 
   _showShoppingListBtn() {
@@ -388,6 +560,9 @@ const App = {
             <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
           </svg>
           ${T.actions.delete}
+        </button>
+        <button class="btn btn--ai" onclick="App.aiCompleteRecipe('${recipe.id}')" title="Rellenar ingredientes y pasos con IA">
+          🤖 Rellenar con IA
         </button>
         <button class="btn btn--primary" onclick="App.editRecipe('${id}')">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -591,6 +766,108 @@ const App = {
       e.preventDefault();
       this.saveRecipe(true);
     });
+  },
+
+  // ========== AI: completar ingredientes y pasos de una receta ==========
+  async aiCompleteRecipe(id) {
+    const recipe = Recipes.getById(id);
+    if (!recipe) return;
+
+    if (!AI.hasKey()) {
+      Components.toast.show('Configurá tu API key en Ajustes → 🤖 Agente IA');
+      return;
+    }
+
+    // Mostrar modal con estado "generando"
+    Components.modal.open('🤖 Generando receta', `
+      <div style="text-align: center; padding: var(--space-lg);">
+        <div class="ai-spinner"></div>
+        <p style="margin-top: 16px; color: var(--color-text-muted);">
+          La IA está pensando ingredientes y pasos para<br>
+          <strong style="color: var(--color-text);">"${Components.escapeHtml(recipe.nombre)}"</strong>
+        </p>
+      </div>
+    `);
+
+    try {
+      const result = await AI.completeRecipe(recipe.nombre);
+      const ings = result.ingredientes || [];
+      const pasos = result.pasos || [];
+
+      if (ings.length === 0 && pasos.length === 0) {
+        Components.modal.open('🤖 Sin resultados', `
+          <div style="padding: var(--space-md);">
+            <p>La IA no devolvió ingredientes ni pasos para esta receta.</p>
+            <button class="btn btn--primary btn--full" onclick="Components.modal.close()">
+              Cerrar
+            </button>
+          </div>
+        `);
+        return;
+      }
+
+      // Mostrar preview + opción de aplicar o descartar
+      const previewHtml = `
+        <div style="padding: var(--space-md);">
+          <p style="color: var(--color-text-muted); margin-bottom: 16px;">
+            La IA generó esto para <strong>${Components.escapeHtml(recipe.nombre)}</strong>.
+            Revisalo y si te gusta, guardalo. Si no, podés editar después.
+          </p>
+
+          ${ings.length > 0 ? `
+            <h4 style="margin-bottom: 8px;">Ingredientes (${ings.length})</h4>
+            <ul style="margin-bottom: 16px; padding-left: 20px;">
+              ${ings.map(i => `<li>${Components.escapeHtml(i.nombre)} ${i.cantidad ? '(' + Components.escapeHtml(i.cantidad) + ' ' + (i.unidad || '') + ')' : ''}</li>`).join('')}
+            </ul>
+          ` : ''}
+
+          ${pasos.length > 0 ? `
+            <h4 style="margin-bottom: 8px;">Pasos (${pasos.length})</h4>
+            <ol style="margin-bottom: 16px; padding-left: 20px;">
+              ${pasos.map(p => `<li>${Components.escapeHtml(p)}</li>`).join('')}
+            </ol>
+          ` : ''}
+
+          <div style="display: flex; gap: 8px; margin-top: 16px;">
+            <button class="btn btn--outline" onclick="Components.modal.close()">
+              Descartar
+            </button>
+            <button class="btn btn--primary" style="flex: 1;"
+                    onclick="App.applyAiRecipe('${id}', ${JSON.stringify(ings).replace(/"/g, '&quot;')}, ${JSON.stringify(pasos).replace(/"/g, '&quot;')})">
+              💾 Guardar en la receta
+            </button>
+          </div>
+          <p style="font-size: 12px; color: var(--color-text-muted); margin-top: 12px;">
+            También podés tocar "Editar" después para ajustar antes de guardar.
+          </p>
+        </div>
+      `;
+      Components.modal.open('🤖 Receta sugerida', previewHtml);
+    } catch (err) {
+      console.error(err);
+      Components.modal.open('🤖 Error', `
+        <div style="padding: var(--space-md);">
+          <p style="color: var(--color-error); margin-bottom: 12px;">
+            ❌ ${Components.escapeHtml(err.message)}
+          </p>
+          <p style="font-size: 13px; color: var(--color-text-muted); margin-bottom: 16px;">
+            Verificá que la API key esté bien y que tengas conexión a internet.
+          </p>
+          <button class="btn btn--primary btn--full" onclick="Components.modal.close()">
+            Cerrar
+          </button>
+        </div>
+      `);
+    }
+  },
+
+  applyAiRecipe(id, ingredientes, pasos) {
+    const recipe = Recipes.getById(id);
+    if (!recipe) return;
+    Recipes.update(id, { ingredientes, pasos });
+    Components.toast.show('✅ Receta actualizada con IA');
+    Components.modal.close();
+    this.renderRecipeDetail(id);
   },
 
   saveRecipe(isEdit = false) {

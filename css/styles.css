@@ -1157,6 +1157,142 @@ select.form-input {
   flex-shrink: 0;
 }
 
+/* === AI features === */
+.btn--ai {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+}
+
+.btn--ai:active {
+  opacity: 0.85;
+}
+
+/* Spinner de "generando" */
+.ai-spinner {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-accent);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: ai-spin 0.8s linear infinite;
+}
+
+.ai-spinner--inline {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+@keyframes ai-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Botón flotante del chat */
+.ai-chat-fab {
+  position: fixed;
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + 16px);
+  right: 16px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 26px;
+  border: none;
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+  z-index: 50;
+  transition: transform 0.15s;
+}
+
+.ai-chat-fab:active {
+  transform: scale(0.92);
+}
+
+/* Chat */
+.ai-chat {
+  display: flex;
+  flex-direction: column;
+  height: 60vh;
+  max-height: 500px;
+}
+
+.ai-chat__messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-chat__msg {
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  max-width: 85%;
+  word-wrap: break-word;
+}
+
+.ai-chat__msg--user {
+  align-self: flex-end;
+  background: var(--color-primary);
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.ai-chat__msg--agent {
+  align-self: flex-start;
+  background: var(--color-background);
+  color: var(--color-text);
+  border-bottom-left-radius: 4px;
+}
+
+.ai-chat__input-wrap {
+  display: flex;
+  gap: 8px;
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-sm);
+}
+
+.ai-chat__input-wrap .form-input {
+  flex: 1;
+  font-size: var(--font-size-sm);
+}
+
+/* Menu propuesto card dentro del chat */
+.ai-chat__menu-card {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.ai-chat__menu-row {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ai-chat__menu-row:last-of-type {
+  border-bottom: none;
+}
+
+.ai-chat__menu-day {
+  font-weight: 600;
+  color: var(--color-primary);
+  min-width: 32px;
+}
+
 /* === App footer (version indicator) === */
 .app-footer {
   display: flex;
