@@ -77,17 +77,32 @@ const DB = {
   // ============================================
   async signIn(email) {
     if (!this.client) return false;
+
+    // Construir URL de redirección. Si estamos en localhost, avisar al usuario
+    // (el magic link va a quedar pegado a localhost y no se puede abrir desde
+    // el celular).
+    const redirectTo = window.location.origin + window.location.pathname;
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      Components.toast.show(
+        '⚠️ Estás en localhost — el magic link no va a funcionar en otro dispositivo. ' +
+        'Configurá el Site URL en Supabase o probá desde la versión publicada.'
+      );
+    }
+
     const { error } = await this.client.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: window.location.origin + window.location.pathname
+        emailRedirectTo: redirectTo
       }
     });
     if (error) {
       Components.toast.show('❌ ' + error.message);
       return false;
     }
-    Components.toast.show('✅ Revisá tu email y tocá el link para entrar');
+    Components.toast.show(
+      `✅ Revisá tu email y tocá el link para entrar. ` +
+      `(El link te lleva a: ${redirectTo})`
+    );
     return true;
   },
 
