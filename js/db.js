@@ -50,7 +50,7 @@ const DB = {
   // ============================================
   // Auth — whitelist simple
   // ============================================
-  async signIn(email) {
+  async signIn(email, password) {
     if (!this.client) return false;
     const cleanEmail = (email || '').trim().toLowerCase();
 
@@ -58,35 +58,41 @@ const DB = {
       Components.toast.show('Email inválido');
       return false;
     }
+    if (!password) {
+      Components.toast.show('Contraseña requerida');
+      return false;
+    }
 
-    // Chequear contra la tabla `usuarios`
-    const { data, error } = await this.client
-      .from('usuarios')
-      .select('email, nombre')
-      .eq('email', cleanEmail)
-      .maybeSingle();
+    // Llama a la función RPC del server, que valida email + password
+    // con bcrypt. La tabla `usuarios` no se expone al cliente.
+    const { data, error } = await this.client.rpc('login_user', {
+      user_email: cleanEmail,
+      user_password: password
+    });
 
     if (error) {
       Components.toast.show('❌ ' + error.message);
       return false;
     }
 
-    if (!data) {
-      Components.toast.show('❌ Email no autorizado. Hablá con David para que te agregue.');
+    if (!data || data.length === 0) {
+      Components.toast.show('❌ Email o contraseña incorrectos');
       return false;
     }
 
+    const user = data[0];
+
     // Login OK — guardar "sesión" en localStorage y arrancar sync
     localStorage.setItem(this.USER_KEY, JSON.stringify({
-      email: data.email,
-      nombre: data.nombre,
+      email: user.email,
+      nombre: user.nombre,
       loginAt: new Date().toISOString()
     }));
 
     await this.pullAll();
     this.subscribe();
 
-    Components.toast.show(`✅ Bienvenido, ${data.nombre || data.email}`);
+    Components.toast.show(`✅ Bienvenido, ${user.nombre || user.email}`);
     return true;
   },
 
@@ -252,9 +258,13 @@ const DB = {
         <div class="signin-card">
           <div class="signin-card__icon">🍽️</div>
           <h2 class="signin-card__title">Menú Semanal</h2>
-          <p class="signin-card__hint">Ingresá tu email para entrar. Solo David y María tienen acceso.</p>
+          <p class="signin-card__hint">Ingresá tu email y contraseña. Solo David y María tienen acceso.</p>
           <input type="email" id="signin-email" class="form-input"
-                 placeholder="david@email.com" autocomplete="email">
+                 placeholder="david@email.com" autocomplete="email"
+                 style="margin-bottom: 12px;">
+          <input type="password" id="signin-password" class="form-input"
+                 placeholder="••••••" autocomplete="current-password"
+                 style="margin-bottom: 16px;">
           <button class="btn btn--primary btn--full" id="signin-btn">
             Entrar
           </button>
@@ -262,8 +272,11 @@ const DB = {
       </div>
     `;
     document.getElementById('signin-btn').addEventListener('click', () => DB.submitSignIn());
-    document.getElementById('signin-email').addEventListener('keydown', (e) => {
+    document.getElementById('signin-password').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') DB.submitSignIn();
+    });
+    document.getElementById('signin-email').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('signin-password').focus();
     });
     // Ocultar chrome: tabs + menú hamburguesa
     const nav = document.getElementById('nav-tabs');
@@ -275,9 +288,9 @@ const DB = {
   },
 
   async submitSignIn() {
-    const input = document.getElementById('signin-email');
-    const email = (input?.value || '').trim();
-    const ok = await this.signIn(email);
+    const email = (document.getElementById('signin-email')?.value || '').trim();
+    const password = document.getElementById('signin-password')?.value || '';
+    const ok = await this.signIn(email, password);
     if (ok && typeof App !== 'undefined') {
       // cerrar modal si estaba abierto y refrescar vista
       if (typeof Components !== 'undefined') Components.modal.close();
