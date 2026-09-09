@@ -1,10 +1,9 @@
 // ============================================
-// DB — Supabase (auth + sync + realtime)
+// DB — Supabase (sync + realtime + whitelist auth)
 // ============================================
-// Reemplaza a sync.js (GitHub Gist). Supabase hace:
-//  • Auth con magic link por email (sin contraseña)
-//  • Sincronización automática en cada cambio
-//  • Realtime: cambios del otro móvil aparecen al instante
+// Auth: tabla `usuarios` con los emails permitidos (whitelist simple).
+// Sync: pull/push automático de recipes y menu_weeks.
+// Realtime: cambios del otro móvil aparecen al instante.
 //
 // ⚠️ CONFIGURAR: editá SUPABASE_URL y SUPABASE_ANON_KEY abajo.
 
@@ -16,6 +15,8 @@ const DB = {
   _channel: null,
   _pulling: false,   // evita loops cuando pullAll dispara Store.set
 
+  USER_KEY: 'menuapp_user',   // localStorage key de la "sesión" (email del usuario)
+
   // ============================================
   // Init
   // ============================================
@@ -26,39 +27,18 @@ const DB = {
     }
     try {
       this.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        auth: { persistSession: true, autoRefreshToken: true }
+        auth: { persistSession: false, autoRefreshToken: false }
       });
     } catch (err) {
       console.error('Error creando cliente Supabase:', err);
       return false;
     }
 
-    // Procesar magic-link callback si la URL trae ?code= o #access_token=
-    const { data: { session } } = await this.client.auth.getSession();
-    if (session) await this._afterAuth();
-
-    // Reaccionar a login/logout (incluye cuando el usuario toca el magic link)
-    this.client.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        await this._afterAuth();
-        if (typeof Components !== 'undefined') Components.modal.close();
-        if (typeof App !== 'undefined') {
-          if (App.currentView === 'signin' || !App.currentView) App._handleRoute();
-          else if (App.currentView === 'menu') App.renderMenuView();
-          else if (App.currentView === 'recipes') App.renderRecipesView();
-        }
-      } else if (event === 'SIGNED_OUT') {
-        Store.remove(Store.KEYS.RECIPES);
-        Store.remove(Store.KEYS.MENU);
-        if (typeof Recipes !== 'undefined') Recipes._recipes = null;
-        if (typeof Menu !== 'undefined')      Menu._menu = null;
-        this._unsubscribe();
-        if (typeof App !== 'undefined') {
-          App.currentView = 'signin';
-          DB.renderSignInView();
-        }
-      }
-    });
+    // Si ya hay un usuario "logueado", sincronizar datos y suscribirse a realtime
+    if (this.isAuth()) {
+      await this.pullAll();
+      this.subscribe();
+    }
 
     // Hookear cambios locales → push a Supabase (idempotente)
     Store.registerSyncHook(Store.KEYS.RECIPES, (recipes) => DB.pushRecipes(recipes));
@@ -67,69 +47,89 @@ const DB = {
     return true;
   },
 
-  async _afterAuth() {
-    await this.pullAll();
-    this.subscribe();
-  },
-
   // ============================================
-  // Auth
+  // Auth — whitelist simple
   // ============================================
   async signIn(email) {
     if (!this.client) return false;
+    const cleanEmail = (email || '').trim().toLowerCase();
 
-    // Construir URL de redirección. Si estamos en localhost, avisar al usuario
-    // (el magic link va a quedar pegado a localhost y no se puede abrir desde
-    // el celular).
-    const redirectTo = window.location.origin + window.location.pathname;
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      Components.toast.show(
-        '⚠️ Estás en localhost — el magic link no va a funcionar en otro dispositivo. ' +
-        'Configurá el Site URL en Supabase o probá desde la versión publicada.'
-      );
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      Components.toast.show('Email inválido');
+      return false;
     }
 
-    const { error } = await this.client.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: redirectTo
-      }
-    });
+    // Chequear contra la tabla `usuarios`
+    const { data, error } = await this.client
+      .from('usuarios')
+      .select('email, nombre')
+      .eq('email', cleanEmail)
+      .maybeSingle();
+
     if (error) {
       Components.toast.show('❌ ' + error.message);
       return false;
     }
-    Components.toast.show(
-      `✅ Revisá tu email y tocá el link para entrar. ` +
-      `(El link te lleva a: ${redirectTo})`
-    );
+
+    if (!data) {
+      Components.toast.show('❌ Email no autorizado. Hablá con David para que te agregue.');
+      return false;
+    }
+
+    // Login OK — guardar "sesión" en localStorage y arrancar sync
+    localStorage.setItem(this.USER_KEY, JSON.stringify({
+      email: data.email,
+      nombre: data.nombre,
+      loginAt: new Date().toISOString()
+    }));
+
+    await this.pullAll();
+    this.subscribe();
+
+    Components.toast.show(`✅ Bienvenido, ${data.nombre || data.email}`);
     return true;
   },
 
   async signOut() {
-    await this.client.auth.signOut();
-    // onAuthStateChange se encarga del resto
+    localStorage.removeItem(this.USER_KEY);
+    Store.remove(Store.KEYS.RECIPES);
+    Store.remove(Store.KEYS.MENU);
+    if (typeof Recipes !== 'undefined') Recipes._recipes = null;
+    if (typeof Menu !== 'undefined')    Menu._menu = null;
+    this._unsubscribe();
   },
 
+  // ¿Hay un usuario "logueado" en localStorage?
   isAuth() {
-    return !!(this.client && this.client.auth.getSession);
-  },
-
-  // ¿Hay sesión activa? (sin red, usa cache local)
-  async _isAuthed() {
-    if (!this.client) return false;
     try {
-      const { data: { session } } = await this.client.auth.getSession();
-      return !!session;
+      const data = JSON.parse(localStorage.getItem(this.USER_KEY) || 'null');
+      return !!(data && data.email);
     } catch {
       return false;
     }
   },
 
+  // Alias async para mantener compatibilidad con código viejo
+  async _isAuthed() {
+    return this.isAuth();
+  },
+
   async getUserEmail() {
-    if (!this.client) return null;
-    const { data: { user } } = await this.client.auth.getUser();
-    return user ? user.email : null;
+    try {
+      const data = JSON.parse(localStorage.getItem(this.USER_KEY) || 'null');
+      return data?.email || null;
+    } catch {
+      return null;
+    }
+  },
+
+  async getUserName() {
+    try {
+      const data = JSON.parse(localStorage.getItem(this.USER_KEY) || 'null');
+      return data?.nombre || null;
+    } catch {
+      return null;
+    }
   },
 
   // ============================================
@@ -181,7 +181,7 @@ const DB = {
   // ============================================
   async pushRecipes(recipes) {
     if (!this.client || this._pulling) return;
-    if (!this._isAuthed()) return;
+    if (!this.isAuth()) return;
     if (!recipes || recipes.length === 0) return;
     const rows = recipes.map(r => ({
       id: r.id,
@@ -201,7 +201,7 @@ const DB = {
 
   async pushMenu(menu) {
     if (!this.client || this._pulling) return;
-    if (!this._isAuthed()) return;
+    if (!this.isAuth()) return;
     const rows = Object.entries(menu).map(([week_key, data]) => ({
       week_key,
       data,
@@ -252,11 +252,11 @@ const DB = {
         <div class="signin-card">
           <div class="signin-card__icon">🍽️</div>
           <h2 class="signin-card__title">Menú Semanal</h2>
-          <p class="signin-card__hint">Ingresá tu email — te enviamos un link mágico para entrar.</p>
+          <p class="signin-card__hint">Ingresá tu email para entrar. Solo David y María tienen acceso.</p>
           <input type="email" id="signin-email" class="form-input"
                  placeholder="david@email.com" autocomplete="email">
           <button class="btn btn--primary btn--full" id="signin-btn">
-            Enviar link
+            Entrar
           </button>
         </div>
       </div>
@@ -277,25 +277,29 @@ const DB = {
   async submitSignIn() {
     const input = document.getElementById('signin-email');
     const email = (input?.value || '').trim();
-    if (!email || !email.includes('@')) {
-      Components.toast.show('Email inválido');
-      return;
+    const ok = await this.signIn(email);
+    if (ok && typeof App !== 'undefined') {
+      // cerrar modal si estaba abierto y refrescar vista
+      if (typeof Components !== 'undefined') Components.modal.close();
+      if (App.currentView === 'signin' || !App.currentView) App._handleRoute();
+      else if (App.currentView === 'menu') App.renderMenuView();
+      else if (App.currentView === 'recipes') App.renderRecipesView();
     }
-    await this.signIn(email);
   },
 
   // ============================================
-  // UI — Panel de ajustes (reemplaza a Sync.renderSettings)
+  // UI — Panel de ajustes
   // ============================================
   async renderSettings() {
     const email = await this.getUserEmail();
+    const nombre = await this.getUserName();
     return `
       <div class="sync-settings">
         <div class="card">
           <h3 style="margin-bottom: 16px;">☁️ Sincronización</h3>
 
           <p style="margin-bottom: 8px;">
-            Sesión activa: <strong>${email || '(cargando...)'}</strong>
+            Sesión activa: <strong>${nombre ? nombre + ' (' + email + ')' : (email || '(cargando...)')}</strong>
           </p>
           <p style="color: var(--color-text-muted); margin-bottom: 16px; font-size: 13px;">
             Los cambios se guardan automáticamente en la nube y aparecen al instante
@@ -329,5 +333,9 @@ const DB = {
   async signOutAndConfirm() {
     if (!confirm('¿Cerrar sesión? Tus datos locales se borrarán hasta volver a entrar.')) return;
     await this.signOut();
+    if (typeof App !== 'undefined') {
+      App.currentView = 'signin';
+      DB.renderSignInView();
+    }
   }
 };

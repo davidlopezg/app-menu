@@ -17,7 +17,7 @@ const App = {
 
     this._setupEventListeners();
 
-    // Supabase: setup + (if auth) pullAll + subscribe
+    // Supabase: setup + (si ya hay user logueado) pullAll + subscribe
     let dbOk = false;
     try {
       dbOk = await DB.init();
@@ -36,17 +36,10 @@ const App = {
       return;
     }
 
-    // Si llego hasta aca, DB esta OK.
-    try {
-      const { data: { session } } = await DB.client.auth.getSession();
-      if (session) {
-        this._handleRoute();
-      } else {
-        this.currentView = 'signin';
-        DB.renderSignInView();
-      }
-    } catch (err) {
-      console.error('Error leyendo sesion:', err);
+    // DB OK — si hay user en localStorage, ir directo al menú; si no, signin.
+    if (DB.isAuth()) {
+      this._handleRoute();
+    } else {
       this.currentView = 'signin';
       DB.renderSignInView();
     }
