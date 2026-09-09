@@ -158,15 +158,67 @@ def parse_md(md_path: Path):
     if m:
         meta['link'] = m.group(1).strip()
 
-    # Ingredientes: lista de "Nombre (url), Nombre (url), ..."
-    m = re.search(r'^Ingredientes:\s*(.+)$', text, re.MULTILINE)
+    # === Ingredientes ===
+    # Formato A: inline "Ingredientes: Name1 (url1), Name2 (url2), ..."
+    # Formato B: lista vertical después de "Ingredientes:" hasta línea vacía/header
+    meta['ingredientes'] = []
+
+    # Primero intentar formato A
+    m = re.search(r'^Ingredientes:\s*(.+?)(?=\n\n|\n#|\nSaludable:|\Z)', text, re.MULTILINE | re.DOTALL)
     if m:
-        raw = m.group(1)
-        # Patrón: capturar "nombre (url)" - los nombres no tienen parentesis
-        parts = re.findall(r'([^,(]+?)\s*(?:\([^)]*\))?(?:,|$)', raw)
-        meta['ingredientes'] = [p.strip() for p in parts if p.strip()]
-    else:
-        meta['ingredientes'] = []
+        raw = m.group(1).strip()
+        # Si la primera linea tiene (url), es formato A
+        if '(http' in raw.split('\n')[0]:
+            # Split por ", " pero respetando paréntesis
+            items = split_inline_ingredients(raw.split('\n')[0])
+            meta['ingredientes'] = items
+        else:
+            # Formato B: cada línea es un ingrediente (hasta línea vacía)
+            for line in raw.split('\n'):
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    break
+                # Limpiar numeración tipo "1.", "2)" al inicio
+                line = re.sub(r'^\d+[\.\)]\s*', '', line)
+                # Quitar punto final
+                line = line.rstrip('.').strip()
+                if line and not line.startswith('['):
+                    meta['ingredientes'].append(line)
+
+    # Formato C: sección "# Ingredientes" con checklist "- [ ] item"
+    if not meta['ingredientes']:
+        section = re.search(
+            r'^#\s*Ingredientes\s*\n((?:- \[[ x]\] .+(?:\n|$))+)',
+            text, re.MULTILINE)
+        if section:
+            for line in section.group(1).split('\n'):
+                m = re.match(r'^- \[[ x]\]\s*(.+)$', line)
+                if m and m.group(1).strip():
+                    meta['ingredientes'].append(m.group(1).strip())
+
+    # === Pasos (Elaboración / Preparación / Pasos) ===
+    meta['pasos'] = []
+    for section_name in ['Elaboración', 'Elaboracion', 'Preparación', 'Preparacion', 'Pasos', 'Instrucciones']:
+        # Lista numerada: "1. paso", "2. paso"
+        section = re.search(
+            rf'^#\s*{section_name}\s*\n((?:\d+\..+(?:\n|$))+)',
+            text, re.MULTILINE)
+        if section:
+            for line in section.group(1).split('\n'):
+                m = re.match(r'^\d+\.\s*(.+)$', line)
+                if m and m.group(1).strip():
+                    meta['pasos'].append(m.group(1).strip())
+            break  # usar la primera sección que encontremos
+        # Lista con guion: "- paso"
+        section = re.search(
+            rf'^#\s*{section_name}\s*\n((?:- .+(?:\n|$))+)',
+            text, re.MULTILINE)
+        if section:
+            for line in section.group(1).split('\n'):
+                m = re.match(r'^- (?!\[)\s*(.+)$', line)
+                if m and m.group(1).strip():
+                    meta['pasos'].append(m.group(1).strip())
+            break
 
     # Imagen externa (markdown ![]())
     m = re.search(r'!\[[^\]]*\]\(([^)]+)\)', text)
@@ -175,12 +227,62 @@ def parse_md(md_path: Path):
         if url.startswith('http'):
             meta['imagen_url'] = url
 
+    # Link plano (no markdown) en líneas siguientes
+    if not meta.get('link'):
+        m = re.search(r'^\[?(https?://[^\s\]]+)\]?\(?https?://[^\s\)]+\)?', text, re.MULTILINE)
+        if m:
+            meta['link'] = m.group(1)
+
     # Saludable (no se usa por ahora)
     m = re.search(r'^Saludable:\s*(.+)$', text, re.MULTILINE)
     if m:
         meta['saludable'] = m.group(1).strip().lower() in ('si', 'sí', 'yes', 'true')
 
     return meta
+
+
+def split_inline_ingredients(line: str):
+    """Parte 'Name1 (url1), Name2 (url2), Name3 (opcional) (url3)' en nombres limpios."""
+    items = []
+    # Encontrar cada patron: nombre opcionalmente seguido de (url)
+    # El problema es cuando el nombre tiene sus propios parentesis como "Nueces (o frutos)"
+    # Estrategia: split por ', ' pero solo cuando NO estamos dentro de paréntesis
+    depth = 0
+    current = ''
+    for ch in line:
+        if ch == '(':
+            depth += 1
+            current += ch
+        elif ch == ')':
+            depth -= 1
+            current += ch
+            # Si depth llega a 0, terminamos un item (la URL cierra)
+            if depth == 0:
+                items.append(current.strip())
+                current = ''
+        elif ch == ',' and depth == 0:
+            if current.strip():
+                items.append(current.strip())
+            current = ''
+        else:
+            current += ch
+    if current.strip():
+        items.append(current.strip())
+
+    # Limpiar cada item: sacar la URL y dejar solo el nombre
+    cleaned = []
+    for item in items:
+        # Quitar la URL entre parentesis al final
+        # Patron: "Nombre (opcional) (url)" o "Nombre (url)" o "Nombre"
+        m = re.match(r'^(.+?)\s*\(https?://[^\)]+\)\s*$', item)
+        if m:
+            cleaned.append(m.group(1).strip())
+        elif item.startswith('(') and ')' in item:
+            # Es solo una URL entre parentesis, descartar
+            continue
+        else:
+            cleaned.append(item.strip())
+    return cleaned
 
 
 def map_tipo_comida(tags):
@@ -199,6 +301,12 @@ def map_tipo_comida(tags):
 
 # === Main ===
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--clean', action='store_true',
+                        help='Borrar todas las recetas existentes antes de importar')
+    args = parser.parse_args()
+
     recipes_dir = NOTION_DIR / 'Recipes'
     csv_path = NOTION_DIR / 'Recipes fc4a509a71fe4d7faf63a04d45fa2a23.csv'
 
@@ -208,6 +316,32 @@ def main():
     if not csv_path.exists():
         print(f'! No existe {csv_path}')
         sys.exit(1)
+
+    if args.clean:
+        print('-- Limpiando tabla recipes...')
+        # Primero obtener todos los IDs, luego borrar uno por uno (o batch)
+        req = urllib.request.Request(
+            f'{SUPABASE_URL}/rest/v1/recipes?select=id',
+            headers={'apikey': SUPABASE_KEY, 'Authorization': f'Bearer {SUPABASE_KEY}'})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                existing = json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            print(f'  FAIL listando: {e.code} {e.read().decode()[:200]}')
+            sys.exit(1)
+        print(f'  Hay {len(existing)} recetas existentes')
+        if existing:
+            ids = ','.join(f'"{r["id"]}"' for r in existing)
+            req = urllib.request.Request(
+                f'{SUPABASE_URL}/rest/v1/recipes?id=in.({ids})',
+                method='DELETE',
+                headers={'apikey': SUPABASE_KEY, 'Authorization': f'Bearer {SUPABASE_KEY}'})
+            try:
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    print(f'  Borradas ({r.status})')
+            except urllib.error.HTTPError as e:
+                print(f'  FAIL borrando: {e.code} {e.read().decode()[:200]}')
+                sys.exit(1)
 
     clean_names = parse_csv(csv_path)
     print(f'CSV: {len(clean_names)} recetas listadas\n')
@@ -255,7 +389,7 @@ def main():
             'id': str(uuid.uuid4()),
             'nombre': clean_name,
             'ingredientes': ingredientes,
-            'pasos': [],                       # vacio: no hay elaboracion en los .md
+            'pasos': meta.get('pasos', []),
             'nutricion': {'cal': 0, 'hc': 0, 'proteinas': 0, 'grasas': 0, 'fibra': 0, 'azucares': 0},
             'tipo_comida': map_tipo_comida(tags),
             'imagen': img_url,
