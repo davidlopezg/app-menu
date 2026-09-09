@@ -336,9 +336,12 @@ const DB = {
             Versión: <strong style="color: var(--color-text);">${App.VERSION}</strong>
           </p>
           <p style="color: var(--color-text-muted); font-size: 12px; margin-top: 4px;">
-            Si ves funciones que no andan, asegurate de tener la última versión
-            recargando con caché vacía.
+            Si ves funciones que no andan, tocá el botón para forzar la actualización.
           </p>
+          <button class="btn btn--outline btn--sm" style="margin-top: 12px;"
+                  onclick="DB.forceAppUpdate()">
+            🔄 Buscar actualizaciones
+          </button>
         </div>
       </div>
     `;
@@ -361,6 +364,37 @@ const DB = {
     if (typeof App !== 'undefined') {
       App.currentView = 'signin';
       DB.renderSignInView();
+    }
+  },
+
+  // Fuerza la descarga de la ultima version del SW y recarga.
+  async forceAppUpdate() {
+    if (!('serviceWorker' in navigator)) {
+      Components.toast.show('Tu navegador no soporta actualizaciones automaticas');
+      return;
+    }
+    Components.toast.show('Buscando actualizaciones...');
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) {
+        Components.toast.show('No hay service worker registrado');
+        return;
+      }
+      // update() chequea el servidor por un sw.js nuevo
+      await reg.update();
+      // Si hay un SW esperando, activarlo ya
+      if (reg.waiting) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+      // Si hay uno instalando, el listener updatefound del index.html
+      // se va a encargar de recargar cuando termine
+      setTimeout(() => {
+        Components.toast.show('Si hay una version nueva, la pagina se recargara');
+        setTimeout(() => window.location.reload(), 1500);
+      }, 1000);
+    } catch (err) {
+      console.error(err);
+      Components.toast.show('Error: ' + err.message);
     }
   }
 };

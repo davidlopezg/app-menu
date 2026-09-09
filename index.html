@@ -105,7 +105,20 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch((err) => {
+        navigator.serviceWorker.register('./sw.js').then((reg) => {
+          // Cuando hay una nueva version del SW, recargar la pagina
+          // automaticamente para que el usuario vea el codigo nuevo.
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            if (!newWorker) return;
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'activated') {
+                console.log('[App] Nueva version detectada, recargando...');
+                window.location.reload();
+              }
+            });
+          });
+        }).catch((err) => {
           console.warn('SW registration failed:', err);
         });
       });
