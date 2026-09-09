@@ -489,16 +489,16 @@ const DB = {
 
   clearAiConfig() {
     AI.setKey('');
-    AI.setConfig('openai', AI.PROVIDERS.openai.endpoint, AI.PROVIDERS.openai.model);
+    AI.setConfig('minimax', AI.PROVIDERS.minimax.endpoint, AI.PROVIDERS.minimax.model);
     const sel = document.getElementById('ai-provider');
     const ep = document.getElementById('ai-endpoint');
     const md = document.getElementById('ai-model');
     const key = document.getElementById('ai-key-input');
-    if (sel) sel.value = 'openai';
-    if (ep) ep.value = AI.PROVIDERS.openai.endpoint;
-    if (md) md.value = AI.PROVIDERS.openai.model;
+    if (sel) sel.value = 'minimax';
+    if (ep) ep.value = AI.PROVIDERS.minimax.endpoint;
+    if (md) md.value = AI.PROVIDERS.minimax.model;
     if (key) key.value = '';
-    this._aiStatus('🗑️ Todo borrado. Volvió a defaults.', 'ok');
+    this._aiStatus('🗑️ Todo borrado. Volvió a defaults (MiniMax M2.7).', 'ok');
   },
 
   async testAiKey() {

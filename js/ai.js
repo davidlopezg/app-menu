@@ -11,7 +11,7 @@ const AI = {
   // Providers conocidos (el usuario puede editar el endpoint y modelo manualmente)
   PROVIDERS: {
     'openai':     { endpoint: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini',                 name: 'OpenAI' },
-    'minimax':    { endpoint: 'https://api.minimaxi.com/v1/chat/completions', model: 'MiniMax-Text-01',           name: 'MiniMax' },
+    'minimax':    { endpoint: 'https://api.minimaxi.com/v1/chat/completions', model: 'M2.7',           name: 'MiniMax' },
     'mistral':    { endpoint: 'https://api.mistral.ai/v1/chat/completions',   model: 'mistral-small-latest',       name: 'Mistral' },
     'groq':       { endpoint: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.1-8b-instant',  name: 'Groq (Llama)' },
     'openrouter': { endpoint: 'https://openrouter.ai/api/v1/chat/completions', model: 'openai/gpt-4o-mini',       name: 'OpenRouter' },
@@ -75,19 +75,19 @@ Reglas:
     try {
       const cfg = JSON.parse(localStorage.getItem(this.CFG_KEY) || 'null');
       if (cfg) {
-        this.endpoint = cfg.endpoint || this.PROVIDERS.openai.endpoint;
-        this.model = cfg.model || this.PROVIDERS.openai.model;
-        this.provider = cfg.provider || 'openai';
+        this.endpoint = cfg.endpoint || this.PROVIDERS.minimax.endpoint;
+        this.model = cfg.model || this.PROVIDERS.minimax.model;
+        this.provider = cfg.provider || 'minimax';
       } else {
-        // Defaults: OpenAI (el mas usado)
-        this.endpoint = this.PROVIDERS.openai.endpoint;
-        this.model = this.PROVIDERS.openai.model;
-        this.provider = 'openai';
+        // Defaults: MiniMax (lo que usa este proyecto)
+        this.endpoint = this.PROVIDERS.minimax.endpoint;
+        this.model = this.PROVIDERS.minimax.model;
+        this.provider = 'minimax';
       }
     } catch {
-      this.endpoint = this.PROVIDERS.openai.endpoint;
-      this.model = this.PROVIDERS.openai.model;
-      this.provider = 'openai';
+      this.endpoint = this.PROVIDERS.minimax.endpoint;
+      this.model = this.PROVIDERS.minimax.model;
+      this.provider = 'minimax';
     }
   },
 
