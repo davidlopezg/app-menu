@@ -18,63 +18,67 @@ jobs:
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
         run: |
           echo "CF_API_TOKEN length: ${#CF_API_TOKEN}"
           echo "CF_ACCOUNT_ID length: ${#CF_ACCOUNT_ID}"
-          if [ "${#CF_API_TOKEN}" -lt 20 ]; then
-            echo "❌ CF_API_TOKEN está vacío o muy corto. Agregalo en Settings → Secrets."
-            exit 1
-          fi
-          if [ "${#CF_ACCOUNT_ID}" -lt 20 ]; then
-            echo "❌ CF_ACCOUNT_ID está vacío o muy corto. Agregalo en Settings → Secrets."
-            exit 1
-          fi
-          echo "✅ Secrets OK"
+          echo "MINIMAX_API_KEY length: ${#MINIMAX_API_KEY}"
+          MISSING=0
+          [ "${#CF_API_TOKEN}" -lt 20 ] && { echo "❌ CF_API_TOKEN falta"; MISSING=1; }
+          [ "${#CF_ACCOUNT_ID}" -lt 20 ] && { echo "❌ CF_ACCOUNT_ID falta"; MISSING=1; }
+          [ "${#MINIMAX_API_KEY}" -lt 10 ] && { echo "❌ MINIMAX_API_KEY falta"; MISSING=1; }
+          [ $MISSING -eq 1 ] && exit 1
+          echo "✅ Los 3 secrets están"
 
-      - name: Deploy worker to Cloudflare via API
+      - name: Deploy worker script to Cloudflare
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
         run: |
           echo "→ Subiendo proxy/worker.js a Cloudflare Workers…"
-          echo "  Account: ${CF_ACCOUNT_ID}"
-          echo "  Script:  menuapp-minimax-proxy"
-          echo ""
-
-          # Capturar stdout, stderr y exit code
-          set +e
           HTTP_CODE=$(curl -sS -o /tmp/resp.json -w "%{http_code}" -X PUT \
             "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/workers/scripts/menuapp-minimax-proxy" \
             -H "Authorization: Bearer ${CF_API_TOKEN}" \
             -H "Content-Type: application/javascript" \
             --data-binary @proxy/worker.js)
-          CURL_EXIT=$?
-          set -e
-
           echo "HTTP status: $HTTP_CODE"
-          echo "curl exit:   $CURL_EXIT"
-          echo "Response body:"
-          cat /tmp/resp.json 2>/dev/null | head -c 1000 || echo "(vacío)"
+          cat /tmp/resp.json | head -c 600
           echo ""
-
-          if [ "$CURL_EXIT" -ne 0 ]; then
-            echo "❌ curl falló (exit $CURL_EXIT). Probable problema de red."
-            exit 1
-          fi
-
           if [ "$HTTP_CODE" != "200" ]; then
-            echo "❌ Cloudflare devolvió HTTP $HTTP_CODE."
-            echo "Causas comunes:"
-            echo "  401: token inválido"
-            echo "  403: token sin permiso 'Workers Scripts: Edit'"
-            echo "  404: account_id incorrecto"
+            echo "❌ Deploy del script falló (HTTP $HTTP_CODE)"
             exit 1
           fi
+          echo "✅ Script deployado"
 
+      - name: Push MiniMax key as Worker secret
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+        run: |
+          echo "→ Subiendo secret MINIMAX_API_KEY al Worker…"
+          HTTP_CODE=$(curl -sS -o /tmp/resp.json -w "%{http_code}" -X PUT \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/workers/scripts/menuapp-minimax-proxy/secrets/MINIMAX_API_KEY" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"type\":\"secret_text\",\"value\":\"${MINIMAX_API_KEY}\"}")
+          echo "HTTP status: $HTTP_CODE"
+          cat /tmp/resp.json | head -c 600
           echo ""
-          echo "✅ Worker desplegado."
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ Subida del secret falló (HTTP $HTTP_CODE)"
+            exit 1
+          fi
+          echo "✅ Secret configurado"
+
+      - name: Listo
+        if: success()
+        run: |
           echo ""
-          echo "Configurá en la app:"
+          echo "🎉 Worker + secret deployados."
+          echo ""
+          echo "En la app:"
           echo "  Ajustes → 🤖 Agente IA → Proveedor: Personalizado"
           echo "  Endpoint: https://menuapp-minimax-proxy.workers.dev"
           echo "  Modelo: MiniMax M3"
+          echo "  API Key: (dejala vacía — el Worker la tiene)"

@@ -1,69 +1,63 @@
 # CORS Proxy — MiniMax API
 
-Este Worker de Cloudflare resuelve el error `Failed to fetch` que aparece
-cuando el navegador intenta llamar directo a `https://api.minimax.io/v1`.
+MiniMax no devuelve `Access-Control-Allow-Origin`, por eso el browser
+tira "Failed to fetch" al llamar a `https://api.minimax.io/v1`.
 
-MiniMax no devuelve los headers `Access-Control-Allow-Origin`, así que el
-browser bloquea la respuesta. El proxy reenvía la request y le agrega los
-headers CORS para que el browser la acepte.
+Este Worker de Cloudflare es el puente: recibe la request del browser,
+agrega los headers CORS, y la reenvía a MiniMax.
 
-## Deploy (una sola vez)
+## Setup en GitHub (3 secrets, una sola vez)
 
-### Opción A — Dashboard web (más fácil)
+Andá a `https://github.com/davidlopezg/app-menu/settings/secrets/actions`
+y agregá:
 
-1. Entrá a https://dash.cloudflare.com (cuenta gratis si no tenés).
-2. **Workers & Pages** → **Create** → **Create Worker**.
-3. Poné un nombre, por ejemplo `menuapp-minimax-proxy`.
-4. Borrá todo el código del editor y pegá el contenido de [`worker.js`](./worker.js).
-5. Click **Save and Deploy**.
-6. Te devuelve una URL tipo:
+| Secret | Valor |
+|--------|-------|
+| `CF_API_TOKEN` | API Token de Cloudflare con permiso **"Edit Cloudflare Workers"** (sacalo de `https://dash.cloudflare.com/profile/api-tokens`) |
+| `CF_ACCOUNT_ID` | Tu Account ID de Cloudflare (visible en el dashboard) |
+| `MINIMAX_API_KEY` | Tu API key de MiniMax (NO va al browser, queda en Cloudflare) |
+
+## Deploy
+
+1. Andá a `https://github.com/davidlopezg/app-menu/actions`
+2. Click **"Deploy CORS Proxy"** → **Run workflow**
+3. Esperá ~30 segundos. Si los 3 secrets están OK, vas a ver:
    ```
-   https://menuapp-minimax-proxy.TU_SUBDOMINIO.workers.dev
+   ✅ Los 3 secrets están
+   ✅ Script deployado
+   ✅ Secret configurado
+   🎉 Worker + secret deployados.
    ```
-   Anotala, la vas a usar en la app.
 
-### Opción B — CLI con Wrangler (para devs)
+## Configurar la app
 
-```bash
-npm install -g wrangler
-wrangler login
-wrangler deploy worker.js --name menuapp-minimax-proxy
-```
-
-Te devuelve la misma URL.
-
-## Configurar en la app
-
-1. Abrí la app → **Ajustes** → 🤖 **Agente IA**
+1. **Ajustes → 🤖 Agente IA**
 2. **Proveedor:** Personalizado
-3. **Endpoint URL:** la URL de tu worker, por ejemplo
-   ```
-   https://menuapp-minimax-proxy.TU_SUBDOMINIO.workers.dev
-   ```
-   (Opcional: agregale `/v1` al final si querés ser explícito, funciona igual.)
+3. **Endpoint URL:** `https://menuapp-minimax-proxy.workers.dev`
 4. **Modelo:** `MiniMax M3`
-5. **API Key:** tu key de MiniMax
+5. **API Key:** _(dejala vacía — el Worker tiene la key)_
 6. **Guardar todo** → **Probar**
 
-Debería responder `✅ Key funciona`.
+## Actualizar el proxy en el futuro
 
-## Privacidad y costos
+Cada vez que cambies `proxy/worker.js` y hagas `git push`, el workflow
+se dispara solo y redeploya. Para cambiar la API key, actualizá el
+secret `MINIMAX_API_KEY` en GitHub y re-dispará el workflow (o esperá
+al próximo push).
 
-- **Privacidad:** el worker es *stateless* — no loggea headers ni body, solo
-  pasa la request de largo. La key va en el header `Authorization` exactamente
-  igual que si llamaras directo.
-- **Costos:** el plan gratis de Cloudflare da 100.000 requests/día, más que
-  suficiente para uso personal.
+## Por qué la key va en Cloudflare y no en el browser
 
-## Por qué no arreglamos CORS en la app directamente
+- La key no se puede poner en el código (queda en el repo, la ve cualquiera)
+- Si la pone el usuario en localStorage, **no se puede deployar en GitHub Pages**
+  con un build porque la app es estática
+- Con Cloudflare Worker secret, la key queda cifrada en Cloudflare y el
+  browser nunca la toca — más seguro, menos fricción para el usuario
 
-Un proxy CORS tiene que estar en un servidor, no en el browser. Por eso
-necesitamos sí o sí un intermediario. Cloudflare Workers es la opción más
-barata y rápida de montar (no requiere tarjeta).
+## Si preferís otro provider que soporte CORS nativo
 
-## Si después querés algo más pro
+Si esto se complica, podés cambiar el default de la app a:
+- OpenRouter (`https://openrouter.ai/api/v1/chat/completions`)
+- Groq (`https://api.groq.com/openai/v1/chat/completions`)
+- Mistral (`https://api.mistral.ai/v1/chat/completions`)
 
-Cuando el uso crezca, podés:
-- Agregar rate limiting en el worker (`env.RATE_LIMIT` con KV)
-- Restringir por origen (`Access-Control-Allow-Origin: https://davidlopezg.github.io`)
-- Sumar auth con un token propio para que solo tu app pueda usarlo
+Todos funcionan desde browser sin proxy.

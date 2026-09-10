@@ -1,31 +1,23 @@
 // ============================================
 // Cloudflare Worker — CORS proxy para MiniMax
 // ============================================
-// Por qué: el browser no puede llamar directo a https://api.minimax.io/v1
-// porque el server no devuelve Access-Control-Allow-Origin.
-// Este worker recibe la request, la reenvía a MiniMax, y le agrega
-// los headers CORS para que el browser la acepte.
+// Por qué: el browser no puede llamar directo a https://api.minimax.io
+// porque no devuelve Access-Control-Allow-Origin. Este worker recibe
+// la request, le agrega headers CORS, y la reenvía a MiniMax.
 //
-// Deploy (una sola vez, ~2 min):
-//   1. https://dash.cloudflare.com → Workers & Pages → Create
-//   2. Nombre: menuapp-minimax-proxy (o el que quieras)
-//   3. Borrá el código default, pegá este
-//   4. Save and Deploy
-//   5. Te da una URL tipo https://menuapp-minimax-proxy.TU_SUBDOMINIO.workers.dev
+// Diseño: la API key de MiniMax vive en el secret del Worker
+// (env.MINIMAX_API_KEY), nunca llega al browser. Si no está configurada,
+// usa el header Authorization que viene en la request (modo fallback).
 //
-// En la app:
-//   Ajustes → 🤖 Agente IA → Proveedor: Personalizado
-//   Endpoint: la URL de tu worker (SIN path, o con /v1 si querés)
-//   Modelo: MiniMax M3
-//   API Key: tu key de MiniMax
-//   Guardar todo → Probar
+// Setup (3 secrets en GitHub, una sola vez):
+//   CF_API_TOKEN     → token de Cloudflare con permiso "Edit Cloudflare Workers"
+//   CF_ACCOUNT_ID    → tu account ID de Cloudflare
+//   MINIMAX_API_KEY  → tu API key de MiniMax
 //
-// ⚠️ La key va en el header Authorization como siempre. El worker solo
-//    pasa la request de largo, no loggea ni guarda nada.
+// El workflow deploya el script Y sube el secret, todo automático.
 
 export default {
-  async fetch(request) {
-    // Headers CORS que el browser necesita
+  async fetch(request, env) {
     const CORS = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -33,7 +25,7 @@ export default {
       'Access-Control-Max-Age': '86400',
     };
 
-    // Preflight (el browser manda OPTIONS antes de POST cross-origin)
+    // Preflight CORS
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS });
     }
@@ -45,16 +37,23 @@ export default {
       );
     }
 
-    // Reescribir el origen: worker → MiniMax, conservando path y query
+    // Reescribir origen: worker → MiniMax, conservando path y query
     const url = new URL(request.url);
     const targetUrl = `https://api.minimax.io${url.pathname}${url.search}`;
 
-    // Reenviar request tal cual (headers + body)
+    // Construir headers. Si el worker tiene el secret, lo usa SIEMPRE
+    // (ignora el del browser). Si no, usa lo que mandó el browser.
+    const headers = new Headers(request.headers);
+    if (env && env.MINIMAX_API_KEY) {
+      headers.set('Authorization', `Bearer ${env.MINIMAX_API_KEY}`);
+    }
+
+    // Reenviar request
     let upstream;
     try {
       upstream = await fetch(targetUrl, {
         method: 'POST',
-        headers: request.headers,
+        headers,
         body: request.body,
       });
     } catch (err) {
@@ -64,7 +63,7 @@ export default {
       );
     }
 
-    // Devolver el body + status original, sumando los headers CORS
+    // Devolver respuesta con CORS headers
     const body = await upstream.text();
     return new Response(body, {
       status: upstream.status,
