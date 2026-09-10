@@ -1,0 +1,33 @@
+name: Deploy CORS Proxy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'proxy/**'
+      - '.github/workflows/deploy-proxy.yml'
+  workflow_dispatch:    # botón "Run workflow" en GitHub para deployar manualmente
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          command: deploy --name menuapp-minimax-proxy --no-bundle proxy/worker.js
+
+      - name: Show deployed URL
+        if: success()
+        run: |
+          echo "✅ Worker desplegado."
+          echo "URL: https://menuapp-minimax-proxy.workers.dev"
+          echo ""
+          echo "Configurá en la app:"
+          echo "  Ajustes → 🤖 Agente IA → Proveedor: Personalizado"
+          echo "  Endpoint: https://menuapp-minimax-proxy.workers.dev"
+          echo "  Modelo: MiniMax M3"
