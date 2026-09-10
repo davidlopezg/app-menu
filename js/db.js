@@ -503,7 +503,7 @@ const DB = {
     if (ep) ep.value = AI.PROVIDERS.minimax.endpoint;
     if (md) md.value = AI.PROVIDERS.minimax.model;
     if (key) key.value = '';
-    this._aiStatus('🗑️ Todo borrado. Volvió a defaults (MiniMax MiniMax M3).', 'ok');
+    this._aiStatus('🗑️ Todo borrado. Volvió a defaults (MiniMax-M3).', 'ok');
   },
 
   async testAiKey() {
