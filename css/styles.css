@@ -1309,3 +1309,22 @@ select.form-input {
   color: var(--color-success);
   font-weight: 600;
 }
+
+/* === Template actions row (debajo del grid de la semana) === */
+.template-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: var(--space-lg) 0 var(--space-md);
+  padding: 0 var(--space-md);
+}
+
+.template-actions .btn {
+  flex: 1 1 calc(50% - 4px);
+  min-width: 140px;
+}
+
+.template-meta {
+  margin: var(--space-md);
+  padding: var(--space-md);
+}

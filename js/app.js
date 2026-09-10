@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v17 (2025-09-10)',
+  VERSION: 'v18 (2025-09-10)',
 
   // ============================================
   // Initialize
@@ -18,6 +18,7 @@ const App = {
     // Init modules (from localStorage — instant)
     Recipes.init();
     Menu.init();
+    if (typeof Templates !== 'undefined') Templates.init();
     if (typeof AI !== 'undefined') AI.init();
 
     this._setupEventListeners();
@@ -125,6 +126,9 @@ const App = {
       case 'recipes':
         this.renderRecipesView();
         break;
+      case 'template':
+        this.renderTemplateView();
+        break;
       case 'recipe':
         const id = parts[1];
         if (id === 'new') {
@@ -145,6 +149,9 @@ const App = {
         break;
       case 'recipes':
         window.location.hash = 'recipes';
+        break;
+      case 'template':
+        window.location.hash = 'template';
         break;
       case 'recipe':
         if (params.id) {
@@ -214,6 +221,9 @@ const App = {
     
     html += '</div>';
 
+    // Acciones de plantilla (guardar / aplicar / duplicar)
+    html += this._renderTemplateActions();
+
     html += this._renderFooter();
 
     // Click handlers for meal cells
@@ -222,6 +232,111 @@ const App = {
 
     // Botón flotante del chat IA
     this._renderChatButton();
+  },
+
+  // Botones de plantilla que aparecen debajo del grid de la semana
+  _renderTemplateActions() {
+    const hasTpl = Templates.hasAny();
+    return `
+      <div class="template-actions">
+        <button class="btn btn--secondary btn--sm" onclick="App.saveCurrentAsTemplate()">
+          📋 Guardar como plantilla
+        </button>
+        <button class="btn btn--secondary btn--sm" onclick="App.applyTemplateToCurrent()"
+                ${hasTpl ? '' : 'disabled style="opacity:.5"'}>
+          🔁 Aplicar plantilla
+        </button>
+        <button class="btn btn--secondary btn--sm" onclick="App.duplicateWeekToOther()">
+          📅 Duplicar a otra semana
+        </button>
+        ${hasTpl ? `
+          <button class="btn btn--ghost btn--sm" onclick="App.navigate('template', {})">
+            ✏️ Editar plantilla
+          </button>
+        ` : ''}
+      </div>
+    `;
+  },
+
+  // Modal: pedir nombre y guardar semana actual como plantilla
+  saveCurrentAsTemplate() {
+    const current = Templates.getCurrent();
+    const defaultNombre = current?.nombre || 'Mi plantilla';
+    Components.modal.open('📋 Guardar como plantilla', `
+      <p style="color: var(--color-text-muted); margin-bottom: 12px;">
+        ${current
+          ? 'Vas a <strong>sobrescribir</strong> la plantilla existente con la semana actual.'
+          : 'Esto crea una plantilla nueva a partir de la semana actual.'}
+      </p>
+      <label style="font-size: 13px; color: var(--color-text-muted);">Nombre</label>
+      <input type="text" id="tpl-nombre" class="form-input"
+             value="${Components.escapeHtml(defaultNombre)}" style="margin-bottom: 12px;">
+      <label style="font-size: 13px; color: var(--color-text-muted);">Descripción (opcional)</label>
+      <input type="text" id="tpl-desc" class="form-input"
+             value="${Components.escapeHtml(current?.descripcion || '')}"
+             placeholder="Ej: semana típica de invierno" style="margin-bottom: 16px;">
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn--primary" onclick="App._confirmSaveTemplate()">Guardar</button>
+        <button class="btn btn--ghost" onclick="Components.modal.close()">Cancelar</button>
+      </div>
+    `);
+    setTimeout(() => document.getElementById('tpl-nombre')?.focus(), 100);
+  },
+
+  _confirmSaveTemplate() {
+    const nombre = document.getElementById('tpl-nombre')?.value.trim() || 'Mi plantilla';
+    const descripcion = document.getElementById('tpl-desc')?.value.trim() || '';
+    const cur = Templates.getCurrent();
+    if (cur) {
+      Templates.updateMeta(nombre, descripcion);
+      Templates.overwriteFromWeek(Menu.getCurrentWeek());
+    } else {
+      Templates.createFromWeek(Menu.getCurrentWeek(), nombre, descripcion);
+    }
+    Components.modal.close();
+    Components.toast.show('✅ Plantilla guardada');
+    this.renderMenuView();
+  },
+
+  // Aplica la plantilla a la semana actual
+  applyTemplateToCurrent() {
+    if (!Templates.hasAny()) {
+      Components.toast.show('No hay plantilla guardada');
+      return;
+    }
+    if (!confirm('¿Sobrescribir la semana actual con la plantilla?')) return;
+    Templates.applyToCurrentWeek();
+    Components.modal.close();
+    Components.toast.show('✅ Plantilla aplicada');
+    this.renderMenuView();
+  },
+
+  // Modal para elegir semana destino y duplicar la actual
+  duplicateWeekToOther() {
+    const weeks = Templates.getNearbyWeeks(4);
+    Components.modal.open('📅 Duplicar a otra semana', `
+      <p style="color: var(--color-text-muted); margin-bottom: 12px;">
+        Copia la semana actual a:
+      </p>
+      <select id="dup-target" class="form-input" style="margin-bottom: 16px;">
+        ${weeks.map(w => `<option value="${w.key}">${w.label}</option>`).join('')}
+      </select>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn--primary" onclick="App._confirmDuplicateWeek()">Duplicar</button>
+        <button class="btn btn--ghost" onclick="Components.modal.close()">Cancelar</button>
+      </div>
+    `);
+  },
+
+  _confirmDuplicateWeek() {
+    const target = document.getElementById('dup-target')?.value;
+    if (!target) return;
+    if (Menu._menu[target]) {
+      if (!confirm('Esa semana ya tiene menú. ¿Sobrescribir?')) return;
+    }
+    Templates.duplicateCurrentWeekTo(target);
+    Components.modal.close();
+    Components.toast.show(`✅ Copiado a ${target}`);
   },
 
   // Botón flotante que abre el chat IA
@@ -404,10 +519,14 @@ const App = {
   },
 
   showMenuOptions() {
+    const tplLabel = Templates.hasAny() ? '✏️ Editar plantilla' : '📋 Crear plantilla';
     const optionsHtml = `
       <div style="display: flex; flex-direction: column; gap: 8px;">
         <button class="btn btn--secondary btn--full" onclick="App.showShoppingList(); Components.modal.close();">
           🛒 ${T.menu.shoppingList}
+        </button>
+        <button class="btn btn--secondary btn--full" onclick="Components.modal.close(); App.navigate('template', {});">
+          ${tplLabel}
         </button>
         <button class="btn btn--secondary btn--full" onclick="App.showSettings();">
           ⚙️ Ajustes / Sync
@@ -477,6 +596,201 @@ const App = {
         this.navigate('recipe', { id });
       });
     });
+  },
+
+  // ============================================
+  // View: Template (edición de plantilla)
+  // ============================================
+  renderTemplateView() {
+    this.currentView = 'template';
+    this._updateNav(null);
+    this._updateHeader('📋 Plantilla', true);
+
+    const cur = Templates.getCurrent();
+    if (!cur) {
+      // No hay plantilla todavía: ofrecer crearla desde la semana actual
+      const main = document.getElementById('main-content');
+      main.innerHTML = `
+        <div class="signin-view" style="padding: 24px 16px;">
+          <div class="signin-card">
+            <div class="signin-card__icon">📋</div>
+            <h2 class="signin-card__title">Sin plantilla todavía</h2>
+            <p class="signin-card__hint">Creá una a partir de la semana actual o empezá desde cero.</p>
+            <button class="btn btn--primary btn--full" onclick="App.saveCurrentAsTemplate()">
+              📋 Crear desde esta semana
+            </button>
+            <button class="btn btn--ghost btn--full" style="margin-top: 8px;"
+                    onclick="App.navigate('menu')">
+              ← Volver al menú
+            </button>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const main = document.getElementById('main-content');
+    const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+    let html = `
+      <div class="template-meta card" style="margin-bottom: 12px;">
+        <label style="font-size: 13px; color: var(--color-text-muted);">Nombre</label>
+        <input type="text" id="tpl-edit-nombre" class="form-input"
+               value="${Components.escapeHtml(cur.nombre)}"
+               oninput="App._updateTemplateMeta()"
+               style="margin-bottom: 8px;">
+        <label style="font-size: 13px; color: var(--color-text-muted);">Descripción</label>
+        <input type="text" id="tpl-edit-desc" class="form-input"
+               value="${Components.escapeHtml(cur.descripcion || '')}"
+               oninput="App._updateTemplateMeta()"
+               placeholder="Opcional">
+      </div>
+
+      <div class="menu-grid">
+    `;
+
+    Store.getDaysOrder().forEach((day, index) => {
+      const dayMeals = cur.dias[day] || { lunch: null, dinner: null };
+      html += `
+        <div class="menu-day">
+          <div class="menu-day__header">${dayNames[index]}</div>
+          <div class="menu-day__meals">
+      `;
+      Store.getMealTypes().forEach(mealType => {
+        const recipeId = dayMeals[mealType];
+        const recipe = recipeId ? Recipes.getById(recipeId) : null;
+        html += Components.mealCell(mealType, recipe, { source: 'template' });
+      });
+      html += `</div></div>`;
+    });
+
+    html += '</div>';
+
+    html += `
+      <div class="template-actions">
+        <button class="btn btn--primary btn--full" onclick="App.applyTemplateToCurrent()">
+          🔁 Aplicar a esta semana
+        </button>
+        <button class="btn btn--secondary btn--full" style="margin-top: 8px;"
+                onclick="App.applyTemplateToOtherWeek()">
+          📅 Aplicar a otra semana
+        </button>
+        <button class="btn btn--danger btn--full" style="margin-top: 8px;"
+                onclick="App.deleteCurrentTemplate()">
+          🗑️ Eliminar plantilla
+        </button>
+      </div>
+    `;
+
+    main.innerHTML = html;
+    this._attachTemplateCellListeners();
+  },
+
+  // Actualiza nombre/descripción de la plantilla al tipear
+  _updateTemplateMeta() {
+    const nombre = document.getElementById('tpl-edit-nombre')?.value ?? '';
+    const descripcion = document.getElementById('tpl-edit-desc')?.value ?? '';
+    Templates.updateMeta(nombre, descripcion);
+  },
+
+  // Asigna receta a una celda de la plantilla (click handler)
+  _attachTemplateCellListeners() {
+    const dayLabels = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
+    document.querySelectorAll('.meal-cell').forEach(cell => {
+      cell.addEventListener('click', () => {
+        const meal = cell.dataset.meal;
+        const headerText = cell.closest('.menu-day')
+                              .querySelector('.menu-day__header').textContent.toLowerCase();
+        const day = Store.getDaysOrder()[dayLabels.indexOf(headerText)];
+        if (!day || !meal) return;
+
+        if (cell.classList.contains('meal-cell--vacant')) {
+          // Pedir receta
+          this.openRecipeSelector(day, meal, /* forTemplate */ true);
+        } else {
+          // Mostrar opciones (quitar / cambiar)
+          const recipeId = cell.dataset.recipeId;
+          this.openTemplateMealOptions(day, meal, recipeId);
+        }
+      });
+    });
+  },
+
+  // Abre el selector de receta pero guardando en la plantilla, no en la semana
+  openRecipeSelectorForTemplate(day, mealType) {
+    this.pendingMeal = { day, mealType };
+    const recipes = Recipes.getAll();
+    Components.modal.open(
+      T.menu.selectRecipe,
+      Components.recipeSelector(recipes, null, mealType)
+    );
+    this._setupFilterTabs(mealType);
+    // Override: cuando eligen una receta, asignar a plantilla en vez de semana
+    this._templateAssignmentMode = true;
+  },
+
+  // Opciones al tocar una celda ocupada de la plantilla
+  openTemplateMealOptions(day, mealType, recipeId) {
+    const recipe = Recipes.getById(recipeId);
+    Components.modal.open('Comida de la plantilla', `
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <p style="margin: 0 0 8px 0;"><strong>${Components.escapeHtml(recipe?.nombre || '')}</strong></p>
+        <button class="btn btn--secondary btn--full" onclick="Components.modal.close(); App.openRecipeSelectorForTemplate('${day}', '${mealType}');">
+          🔁 Cambiar receta
+        </button>
+        <button class="btn btn--danger btn--full" onclick="App._removeFromTemplate('${day}', '${mealType}');">
+          🗑️ Quitar de la plantilla
+        </button>
+        <button class="btn btn--ghost btn--full" onclick="Components.modal.close()">
+          Cancelar
+        </button>
+      </div>
+    `);
+  },
+
+  _removeFromTemplate(day, mealType) {
+    Templates.remove(day, mealType);
+    Components.modal.close();
+    Components.toast.show('🗑️ Receta quitada');
+    this.renderTemplateView();
+  },
+
+  // Modal: aplicar plantilla a OTRA semana (no la actual)
+  applyTemplateToOtherWeek() {
+    if (!Templates.hasAny()) {
+      Components.toast.show('No hay plantilla guardada');
+      return;
+    }
+    const weeks = Templates.getNearbyWeeks(4);
+    Components.modal.open('📅 Aplicar a otra semana', `
+      <p style="color: var(--color-text-muted); margin-bottom: 12px;">
+        Sobrescribe la semana que elijas con la plantilla actual.
+      </p>
+      <select id="tpl-target" class="form-input" style="margin-bottom: 16px;">
+        ${weeks.map(w => `<option value="${w.key}">${w.label}</option>`).join('')}
+      </select>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn--primary" onclick="App._confirmApplyTemplateToOther()">Aplicar</button>
+        <button class="btn btn--ghost" onclick="Components.modal.close()">Cancelar</button>
+      </div>
+    `);
+  },
+
+  _confirmApplyTemplateToOther() {
+    const target = document.getElementById('tpl-target')?.value;
+    if (!target) return;
+    if (Menu._menu[target] && !confirm('Esa semana ya tiene menú. ¿Sobrescribir?')) return;
+    Menu._menu[target] = Templates._cloneWeek(Templates.getCurrent().dias);
+    Menu._save();
+    Components.modal.close();
+    Components.toast.show(`✅ Plantilla aplicada a ${target}`);
+  },
+
+  deleteCurrentTemplate() {
+    if (!confirm('¿Eliminar la plantilla? Esta acción no se puede deshacer.')) return;
+    Templates.deleteCurrent();
+    Components.toast.show('🗑️ Plantilla eliminada');
+    this.navigate('menu');
   },
 
   // ============================================
@@ -698,23 +1012,30 @@ const App = {
 
   selectRecipeForMeal(recipeId) {
     if (!this.pendingMeal) return;
-    
+
     const { day, mealType } = this.pendingMeal;
     const recipe = Recipes.getById(recipeId);
-    
-    // Warning for dinner with carbs/sugar
-    if (mealType === 'dinner' && !Recipes.isLowCarb(recipe)) {
+
+    // Warning for dinner with carbs/sugar (solo aplica a semanas, no a plantilla)
+    if (!this._templateAssignmentMode && mealType === 'dinner' && !Recipes.isLowCarb(recipe)) {
       if (!confirm(T.validation.cenaHighCarbs)) {
         return;
       }
     }
-    
-    Menu.assign(day, mealType, recipeId);
-    
-    Components.modal.close();
-    Components.toast.show(T.toast.mealAssigned);
+
+    if (this._templateAssignmentMode) {
+      Templates.assign(day, mealType, recipeId);
+      this._templateAssignmentMode = false;
+      Components.modal.close();
+      Components.toast.show('✅ Asignado a la plantilla');
+      this.renderTemplateView();
+    } else {
+      Menu.assign(day, mealType, recipeId);
+      Components.modal.close();
+      Components.toast.show(T.toast.mealAssigned);
+      this.renderMenuView();
+    }
     this.pendingMeal = null;
-    this.renderMenuView();
   },
 
   openMealOptions(day, mealType, recipeId) {

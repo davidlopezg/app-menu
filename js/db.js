@@ -46,8 +46,9 @@ const DB = {
     }
 
     // Hookear cambios locales → push a Supabase (idempotente)
-    Store.registerSyncHook(Store.KEYS.RECIPES, (recipes) => DB.pushRecipes(recipes));
-    Store.registerSyncHook(Store.KEYS.MENU,    (menu)    => DB.pushMenu(menu));
+    Store.registerSyncHook(Store.KEYS.RECIPES,    (recipes)    => DB.pushRecipes(recipes));
+    Store.registerSyncHook(Store.KEYS.MENU,       (menu)       => DB.pushMenu(menu));
+    Store.registerSyncHook(Store.KEYS.TEMPLATES,  (templates)  => DB.pushTemplates(templates));
 
     return true;
   },
@@ -150,12 +151,18 @@ const DB = {
     if (!this.client) return;
     this._pulling = true;
     try {
-      const [{ data: recipes, error: e1 }, { data: weeks, error: e2 }] = await Promise.all([
+      const [
+        { data: recipes, error: e1 },
+        { data: weeks, error: e2 },
+        { data: templates, error: e3 },
+      ] = await Promise.all([
         this.client.from('recipes').select('*'),
-        this.client.from('menu_weeks').select('*')
+        this.client.from('menu_weeks').select('*'),
+        this.client.from('menu_templates').select('*'),
       ]);
       if (e1) console.error('pull recipes:', e1);
       if (e2) console.error('pull weeks:', e2);
+      if (e3) console.error('pull templates:', e3);
 
       if (recipes) {
         const mapped = recipes.map(r => ({
@@ -181,6 +188,21 @@ const DB = {
         if (typeof Menu !== 'undefined') {
           Menu._menu = menu;
           if (!Menu._currentWeek) Menu._currentWeek = Store.getWeekKey();
+        }
+      }
+
+      if (templates) {
+        const mapped = templates.map(t => ({
+          id: t.id,
+          nombre: t.nombre,
+          descripcion: t.descripcion || '',
+          dias: t.data || {},
+          updatedAt: t.updated_at,
+        }));
+        Store.set(Store.KEYS.TEMPLATES, mapped);
+        if (typeof Templates !== 'undefined') {
+          Templates._list = mapped;
+          Templates._currentId = mapped[0]?.id || null;
         }
       }
     } finally {
@@ -224,6 +246,21 @@ const DB = {
     if (error) console.error('pushMenu:', error);
   },
 
+  async pushTemplates(templates) {
+    if (!this.client || this._pulling) return;
+    if (!this.isAuth()) return;
+    if (!templates || templates.length === 0) return;
+    const rows = templates.map(t => ({
+      id: t.id,
+      nombre: t.nombre,
+      descripcion: t.descripcion || '',
+      data: t.dias || {},
+      updated_at: t.updatedAt || new Date().toISOString(),
+    }));
+    const { error } = await this.client.from('menu_templates').upsert(rows);
+    if (error) console.error('pushTemplates:', error);
+  },
+
   // ============================================
   // Realtime (Supabase → local). Cuando el otro dispositivo cambia,
   // pullAll y refresca la vista activa.
@@ -235,6 +272,8 @@ const DB = {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'recipes' },
         () => this._onRemoteChange())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_weeks' },
+        () => this._onRemoteChange())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_templates' },
         () => this._onRemoteChange())
       .subscribe();
   },
@@ -251,6 +290,7 @@ const DB = {
     if (typeof App !== 'undefined') {
       if (App.currentView === 'menu')    App.renderMenuView();
       else if (App.currentView === 'recipes') App.renderRecipesView();
+      else if (App.currentView === 'template') App.renderTemplateView();
     }
   },
 

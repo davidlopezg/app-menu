@@ -6,6 +6,7 @@ const Store = {
   KEYS: {
     RECIPES: 'menuapp_recipes',
     MENU: 'menuapp_menu',
+    TEMPLATES: 'menuapp_templates',
     SETTINGS: 'menuapp_settings'
   },
 
