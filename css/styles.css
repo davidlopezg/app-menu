@@ -1453,3 +1453,64 @@ select.form-input {
 .week-analysis__sub-opts li {
   margin-bottom: 2px;
 }
+
+/* === Panel nutricional local (sin IA) === */
+.nutrition-panel {
+  margin: var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-bg-alt, rgba(0, 0, 0, 0.02));
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.nutrition-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: var(--font-size-sm, 14px);
+  margin-bottom: 12px;
+  color: var(--color-text);
+}
+
+.nutri-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto 20px;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  margin-bottom: 2px;
+  font-size: 13px;
+}
+
+.nutri-row__icon { font-size: 16px; }
+.nutri-row__label { color: var(--color-text); }
+.nutri-row__count { color: var(--color-text-muted, #666); font-variant-numeric: tabular-nums; }
+.nutri-row__status { text-align: right; }
+
+.nutri-row--ok    { background: rgba(40, 167, 69, 0.07); }
+.nutri-row--low   { background: rgba(255, 193, 7, 0.12); }
+.nutri-row--high  { background: rgba(220, 53, 69, 0.10); }
+
+.nutrition-panel__tips {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: rgba(45, 106, 79, 0.08);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.nutrition-panel__tips strong { color: var(--color-primary, #2D6A4F); }
+.nutrition-panel__tips ul { margin: 4px 0 0 0; padding-left: 18px; }
+.nutrition-panel__tips li { margin-bottom: 2px; }
+
+.nutrition-panel__tips--ok {
+  background: rgba(40, 167, 69, 0.10);
+  color: #155724;
+}
+
+.nutrition-panel__cta {
+  margin-top: 12px;
+}

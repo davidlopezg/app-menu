@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v21 (2025-09-10)',
+  VERSION: 'v22 (2025-09-10)',
 
   // ============================================
   // Initialize
@@ -221,8 +221,8 @@ const App = {
     
     html += '</div>';
 
-    // Análisis IA de la semana
-    html += this._renderAnalyzeButton();
+    // Panel nutricional local (instantáneo, sin IA)
+    html += NutritionPanel.render(Menu.getCurrentWeek(), Recipes.getAll());
 
     // Acciones de plantilla (guardar / aplicar / duplicar)
     html += this._renderTemplateActions();
@@ -235,17 +235,6 @@ const App = {
 
     // Botón flotante del chat IA
     this._renderChatButton();
-  },
-
-  // Botón de análisis IA, arriba de las acciones de plantilla
-  _renderAnalyzeButton() {
-    return `
-      <div class="menu-analysis-cta">
-        <button class="btn btn--primary btn--full" onclick="App.analyzeCurrentWeek()">
-          📊 Analizar esta semana con IA
-        </button>
-      </div>
-    `;
   },
 
   // Analiza el menú actual con el agente IA. Usa cache 24h.

@@ -9,7 +9,7 @@
 // Esto le da a Chrome Android el criterio de "instalable" y mejora
 // el arranque cuando ya visitaste la app.
 
-const CACHE_NAME = 'menuapp-v21';
+const CACHE_NAME = 'menuapp-v22';
 const ASSETS = [
   './',
   './index.html',
@@ -24,6 +24,7 @@ const ASSETS = [
   './js/components.js',
   './js/menu.js',
   './js/templates.js',
+  './js/nutrition-panel.js',
   './js/app.js',
   './assets/icon-192.png',
   './assets/icon-512.png',
