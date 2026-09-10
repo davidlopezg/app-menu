@@ -184,6 +184,115 @@ const Components = {
   },
 
   // ============================================
+  // Tags field (chips clickeables)
+  // ============================================
+  _tagsField(currentTags) {
+    // Tags reconocidos por el panel nutricional (ordenados por categoría)
+    const suggested = [
+      // Categorías nutricionales (las que usa el panel)
+      ...NutritionPanel.CATEGORIES.map(c => ({ tag: c.tagKey, label: c.label, icon: c.icon })),
+      { tag: 'verdura',     label: 'Verdura',     icon: '🥬' },
+      { tag: 'fritura',     label: 'Fritura',     icon: '🔥' },
+      // Tags de uso general
+      { tag: 'vegetariana', label: 'Vegetariana', icon: '🥗' },
+      { tag: 'vegana',      label: 'Vegana',      icon: '🌱' },
+      { tag: 'sin gluten',  label: 'Sin gluten',  icon: '🌾' },
+      { tag: 'rápida',      label: 'Rápida',      icon: '⚡' },
+    ];
+
+    const cur = (currentTags || []).map(t => String(t));
+    const suggestedTags = new Set(suggested.map(s => s.tag));
+    const customTags = cur.filter(t => !suggestedTags.has(t));
+
+    const renderChip = (tag, label, icon, isOn) => `
+      <button type="button" class="tag-chip ${isOn ? 'tag-chip--on' : ''}"
+              data-tag="${this.escapeHtml(tag)}"
+              onclick="Components.toggleTag(this)">
+        <span class="tag-chip__icon">${icon}</span>
+        <span>${label}</span>
+      </button>
+    `;
+
+    const suggestedChips = suggested
+      .map(s => renderChip(s.tag, s.label, s.icon, cur.includes(s.tag)))
+      .join('');
+
+    const customChips = customTags
+      .map(t => renderChip(t, t, '🏷️', true))
+      .join('');
+
+    return `
+      <div class="tags-field" id="tags-field">
+        <div class="tags-field__group">
+          <div class="tags-field__label">Para el panel nutricional:</div>
+          <div class="tags-field__chips">${suggestedChips}</div>
+        </div>
+        ${customTags.length ? `
+          <div class="tags-field__group">
+            <div class="tags-field__label">Custom:</div>
+            <div class="tags-field__chips">${customChips}</div>
+          </div>
+        ` : ''}
+        <div class="tags-field__add">
+          <input type="text" id="tag-custom-input" class="form-input form-input--sm"
+                 placeholder="Agregar tag custom y Enter"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();Components.addCustomTag();}">
+        </div>
+        <input type="hidden" name="tags" id="tags-hidden" value="${this.escapeHtml(cur.join(','))}">
+      </div>
+    `;
+  },
+
+  // Toggle de un chip (sugerido o custom)
+  toggleTag(chip) {
+    const field = document.getElementById('tags-field');
+    if (!field) return;
+    chip.classList.toggle('tag-chip--on');
+    Components._syncTagsHidden(field);
+  },
+
+  // Agrega un tag custom desde el input
+  addCustomTag() {
+    const input = document.getElementById('tag-custom-input');
+    if (!input) return;
+    const val = input.value.trim();
+    if (!val) return;
+    // Si ya existe, no duplicar
+    if (document.querySelector(`.tag-chip[data-tag="${CSS.escape(val)}"]`)) {
+      input.value = '';
+      return;
+    }
+    const field = document.getElementById('tags-field');
+    // Insertar en el grupo "Custom" (o crearlo)
+    let customGroup = field.querySelector('.tags-field__group:nth-of-type(2) .tags-field__chips');
+    if (!customGroup) {
+      const group = document.createElement('div');
+      group.className = 'tags-field__group';
+      group.innerHTML = '<div class="tags-field__label">Custom:</div><div class="tags-field__chips"></div>';
+      const chips = group.querySelector('.tags-field__chips');
+      field.querySelector('.tags-field__add').before(group);
+      customGroup = chips;
+    }
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'tag-chip tag-chip--on';
+    chip.dataset.tag = val;
+    chip.onclick = function() { Components.toggleTag(this); };
+    chip.innerHTML = `<span class="tag-chip__icon">🏷️</span><span>${this.escapeHtml(val)}</span>`;
+    customGroup.appendChild(chip);
+    input.value = '';
+    this._syncTagsHidden(field);
+  },
+
+  // Sincroniza el hidden input con los chips activos
+  _syncTagsHidden(field) {
+    const active = Array.from(field.querySelectorAll('.tag-chip--on'))
+      .map(c => c.dataset.tag);
+    const hidden = document.getElementById('tags-hidden');
+    if (hidden) hidden.value = active.join(',');
+  },
+
+  // ============================================
   // Recipe Form
   // ============================================
   recipeForm(recipe = null, isEdit = false) {
@@ -258,11 +367,12 @@ const Components = {
         </div>
 
         <div class="form-group">
-          <label class="form-label">Tags (separados por coma)</label>
-          <input type="text" name="tags" class="form-input"
-                 value="${this.escapeHtml(existingTags)}"
-                 placeholder="ej: italiana, rápida, vegetariana">
-          <div class="form-hint">Categorías que se muestran en la lista y se usan para filtrar.</div>
+          <label class="form-label">Tags</label>
+          ${this._tagsField(recipe?.tags || [])}
+          <div class="form-hint">
+            Tags se usan para filtrar y para el panel nutricional. Tocá los sugeridos
+            o escribí uno custom y dale Enter.
+          </div>
         </div>
 
         <div class="form-group">

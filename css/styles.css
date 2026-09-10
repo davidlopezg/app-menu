@@ -1514,3 +1514,67 @@ select.form-input {
 .nutrition-panel__cta {
   margin-top: 12px;
 }
+
+/* === Tags field (chips) === */
+.tags-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tags-field__group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tags-field__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-muted, #666);
+}
+
+.tags-field__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 13px;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.tag-chip:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.tag-chip--on {
+  background: rgba(45, 106, 79, 0.15);
+  border-color: var(--color-primary, #2D6A4F);
+  color: var(--color-primary, #2D6A4F);
+  font-weight: 600;
+}
+
+.tag-chip__icon {
+  font-size: 14px;
+}
+
+.tags-field__add {
+  display: flex;
+}
+
+.form-input--sm {
+  padding: 6px 10px;
+  font-size: 13px;
+}
