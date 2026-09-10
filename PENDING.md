@@ -1,92 +1,56 @@
-# Pendiente — Deploy del proxy CORS para MiniMax
+# PENDING — Histórico de la sesión del 2025-09-10
 
-**Sesión cortada el 2025-09-10.** Usuario frustrado, cansado.
+**Estado:** ✅ Resuelto.
 
-## Plan elegido por el usuario
+## El problema real
 
-**La key de MiniMax va como GitHub Secret, no en el browser.**
-El Worker la lee de `env.MINIMAX_API_KEY` y la mete en el header
-Authorization al reenviar a MiniMax. El browser nunca toca la key.
+El error "Failed to fetch" era por **path incorrecto**, no por CORS bloqueado.
 
-## Lo que ya está implementado (todo commiteado)
+- ❌ Endpoint viejo en `js/ai.js`: `https://api.minimax.io/v1`
+- ✅ Endpoint correcto: `https://api.minimax.io/v1/chat/completions`
 
-### 1. Worker con soporte para secret
-`proxy/worker.js`:
-- Si `env.MINIMAX_API_KEY` existe → la usa SIEMPRE (override del header del browser)
-- Si no existe → fallback al header Authorization que viene en la request
+MiniMax **sí devuelve CORS completo** en `/v1/chat/completions`
+(`Access-Control-Allow-Origin: *`, métodos POST/GET permitidos,
+`Authorization` en allow-headers). Confirmado con curl en Termux.
 
-### 2. Workflow que deploya script + secret
-`.github/workflows/deploy-proxy.yml` hace 3 steps:
-- Sanity check de los 3 secrets
-- Deploy del script via Cloudflare REST API
-- Push del secret `MINIMAX_API_KEY` via `PUT /secrets/MINIMAX_API_KEY`
+## Lo que el usuario tenía razón y yo no
 
-### 3. Documentación
-`proxy/README.md` explica los 3 secrets y el flujo completo.
+El usuario dijo "esto que dices es mentira, ya lo tengo configurado en
+otra app". Tenía razón: su otra app (HabitQuest) usa el path completo
+`/v1/chat/completions`, por eso le funciona. Yo asumí que el path base
+`/v1` también funcionaría y era un problema de CORS en general.
 
-## Lo único que falta hacer (5 minutos del usuario)
-
-### En GitHub Secrets
-Andá a `https://github.com/davidlopezg/app-menu/settings/secrets/actions`
-y agregá/actualizá estos 3:
-
-| Secret | Valor |
-|--------|-------|
-| `CF_API_TOKEN` | Token de Cloudflare con permiso "Edit Cloudflare Workers" |
-| `CF_ACCOUNT_ID` | Tu Account ID |
-| `MINIMAX_API_KEY` | Tu API key de MiniMax |
-
-### Disparar el workflow
-`https://github.com/davidlopezg/app-menu/actions` → "Deploy CORS Proxy" → Run workflow.
-
-### En la app
-Ajustes → 🤖 Agente IA:
-- Proveedor: **Personalizado**
-- Endpoint URL: `https://menuapp-minimax-proxy.workers.dev`
-- Modelo: `MiniMax M3`
-- API Key: **VACÍA** (la tiene el Worker)
-
-### ⚠️ Nota sobre el token de Cloudflare
-En la sesión anterior, `CF_API_TOKEN` devolvía error 9109 ("Unauthorized").
-Esto suele pasar porque:
-- Se usó la Global API Key en vez de un API Token scoped
-- El token se creó con permisos insuficientes
-- Espacios al copiar/pegar
-
-**Solución:** asegurar que el token se creó con el template "Edit Cloudflare Workers".
-
-## Plan B (si el proxy no funciona)
-
-Cambiar el default de `js/ai.js` a un provider que soporte CORS nativo:
-- OpenRouter
-- Groq (tier gratis)
-- Mistral
-
-Actualizar `PROVIDERS.minimax` con el endpoint y modelo del provider elegido.
-Bumpear versión SW.
-
-## Archivos clave
-
-- `proxy/worker.js` — el proxy
-- `proxy/README.md` — instrucciones
-- `.github/workflows/deploy-proxy.yml` — workflow
-- `scripts/test-deploy.sh` — diagnóstico local (ya no crítico, el workflow es más fácil)
-
-## Tono con el usuario
-
-Frustrado, cansado. Ir directo al grano. No proponer opciones complejas.
-Si el proxy falla, ofrecer Plan B sin vueltas.
-
-## Commits de esta saga
+## Fix aplicado (commit v16)
 
 ```
-269c6ad  docs: save handoff notes (PENDING.md)  ← ahora desactualizado, ver nueva versión
-f28ffaa  ci: add sanity check + verbose diagnostics
-965a3ee  ci: deploy proxy via Cloudflare REST API
-e3bf047  ci: auto-deploy CORS proxy via GitHub Actions
-d238df2  feat(proxy): add Cloudflare Worker
-58b8241  fix(ai): correct MiniMax default endpoint
-9e16068  fix(db): expose SUPABASE_URL/KEY on DB object
+js/ai.js   → endpoint MiniMax: https://api.minimax.io/v1/chat/completions
+sw.js      → CACHE_NAME = 'menuapp-v16'
+js/app.js  → VERSION = 'v16 (2025-09-10)'
 ```
 
-(El PENDING inicial queda como histórico, este doc lo reemplaza.)
+Pusheado a `origin/main`. El usuario no necesita hacer nada más en su
+app: la próxima vez que abra, el SW v16 reemplaza al viejo y el default
+del dropdown "MiniMax" ya apunta al endpoint correcto.
+
+## Cosas que quedaron armadas pero ya no son necesarias
+
+- `proxy/worker.js` + workflow de deploy + script de diagnóstico
+  → siguen en el repo por si en el futuro quieren Modo B (proxy)
+  o necesitan deployar otra cosa. No molestan.
+- `scripts/test-deploy.sh` → mismo caso, queda como utilidad de debug.
+
+## Lo que NO se cambió
+
+- El mecanismo de guardar la AI key sigue siendo **localStorage**
+  (igual que antes). Para uso personal (David & María) está bien.
+- El Modo A de HabitQuest (key embebida en el bundle vía GitHub
+  Action + VITE_MINIMAX_API_KEY) **no se aplicó** porque app-menu
+  no usa Vite y agregar build step sería restructurar todo. Si
+  en algún momento quieren eso, lo armamos.
+
+## Lección
+
+Antes de montar un proxy y un workflow de deploy, **chequear con curl
+si el endpoint devuelve CORS**. Un solo comando `curl -X OPTIONS` con
+los headers de preflight hubiera resuelto esto en 30 segundos en vez
+de dar toda la vuelta del proxy.
