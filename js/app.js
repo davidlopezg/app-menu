@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v18 (2025-09-10)',
+  VERSION: 'v19 (2025-09-10)',
 
   // ============================================
   // Initialize
@@ -221,6 +221,9 @@ const App = {
     
     html += '</div>';
 
+    // Análisis IA de la semana
+    html += this._renderAnalyzeButton();
+
     // Acciones de plantilla (guardar / aplicar / duplicar)
     html += this._renderTemplateActions();
 
@@ -232,6 +235,111 @@ const App = {
 
     // Botón flotante del chat IA
     this._renderChatButton();
+  },
+
+  // Botón de análisis IA, arriba de las acciones de plantilla
+  _renderAnalyzeButton() {
+    return `
+      <div class="menu-analysis-cta">
+        <button class="btn btn--primary btn--full" onclick="App.analyzeCurrentWeek()">
+          📊 Analizar esta semana con IA
+        </button>
+      </div>
+    `;
+  },
+
+  // Analiza el menú actual con el agente IA. Usa cache 24h.
+  async analyzeCurrentWeek() {
+    if (!AI.hasKey()) {
+      Components.toast.show('Configurá tu API key en Ajustes → 🤖 Agente IA');
+      return;
+    }
+    const wk = Menu.getWeekKey();
+    const cacheKey = `menuapp_week_analysis_${wk}`;
+    const cachedRaw = localStorage.getItem(cacheKey);
+    let cached = null;
+    if (cachedRaw) {
+      try {
+        const parsed = JSON.parse(cachedRaw);
+        if (parsed && parsed.generatedAt && (Date.now() - parsed.generatedAt) < 24 * 60 * 60 * 1000) {
+          cached = parsed;
+        }
+      } catch {}
+    }
+
+    if (cached) {
+      this._showAnalysisModal(cached, /* fromCache */ true);
+      return;
+    }
+
+    this._showAnalysisLoadingModal();
+    try {
+      const result = await AI.analyzeWeek(Menu.getCurrentWeek(), Recipes.getAll());
+      const toCache = { ...result, generatedAt: Date.now() };
+      localStorage.setItem(cacheKey, JSON.stringify(toCache));
+      this._showAnalysisModal(toCache, false);
+    } catch (err) {
+      Components.modal.close();
+      Components.toast.show('❌ ' + err.message);
+    }
+  },
+
+  _showAnalysisLoadingModal() {
+    Components.modal.open('📊 Análisis de la semana', `
+      <div style="text-align: center; padding: 32px 0;">
+        <span class="ai-spinner"></span>
+        <p style="margin-top: 16px; color: var(--color-text-muted);">Analizando menú…</p>
+      </div>
+    `);
+  },
+
+  _showAnalysisModal(data, fromCache) {
+    const ageMin = fromCache ? Math.floor((Date.now() - data.generatedAt) / 60000) : 0;
+    const ageText = fromCache
+      ? (ageMin < 1 ? 'recién generado' : ageMin < 60 ? `hace ${ageMin} min` : `hace ${Math.floor(ageMin / 60)} h`)
+      : 'recién generado';
+
+    const renderList = (arr) =>
+      (arr || []).map(s => `<li>${Components.escapeHtml(s)}</li>`).join('');
+
+    Components.modal.open('📊 Análisis de la semana', `
+      <div class="week-analysis">
+        <p class="week-analysis__age">${ageText}</p>
+        ${data.resumen ? `<p class="week-analysis__resumen">${Components.escapeHtml(data.resumen)}</p>` : ''}
+
+        ${(data.bueno || []).length ? `
+          <div class="week-analysis__section week-analysis__section--good">
+            <h4>✅ Lo bueno</h4>
+            <ul>${renderList(data.bueno)}</ul>
+          </div>
+        ` : ''}
+
+        ${(data.equilibrado || []).length ? `
+          <div class="week-analysis__section week-analysis__section--neutral">
+            <h4>⚖️ Equilibrado</h4>
+            <ul>${renderList(data.equilibrado)}</ul>
+          </div>
+        ` : ''}
+
+        ${(data.malo || []).length ? `
+          <div class="week-analysis__section week-analysis__section--bad">
+            <h4>⚠️ A revisar</h4>
+            <ul>${renderList(data.malo)}</ul>
+          </div>
+        ` : ''}
+
+        <button class="btn btn--secondary btn--full" style="margin-top: 16px;"
+                onclick="App.reAnalyzeCurrentWeek()">
+          🔄 Re-analizar
+        </button>
+      </div>
+    `);
+  },
+
+  async reAnalyzeCurrentWeek() {
+    const wk = Menu.getWeekKey();
+    localStorage.removeItem(`menuapp_week_analysis_${wk}`);
+    await this.analyzeCurrentWeek();
   },
 
   // Botones de plantilla que aparecen debajo del grid de la semana

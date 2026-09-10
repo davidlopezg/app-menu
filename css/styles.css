@@ -1328,3 +1328,50 @@ select.form-input {
   margin: var(--space-md);
   padding: var(--space-md);
 }
+
+/* === Botón de análisis IA sobre las acciones de plantilla === */
+.menu-analysis-cta {
+  margin: var(--space-lg) var(--space-md) var(--space-sm);
+}
+
+/* === Card de análisis semanal === */
+.week-analysis__age {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-align: right;
+  margin: 0 0 4px 0;
+}
+
+.week-analysis__resumen {
+  background: var(--color-bg-alt, rgba(0, 0, 0, 0.03));
+  padding: var(--space-md);
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  margin-bottom: var(--space-md);
+}
+
+.week-analysis__section {
+  margin-bottom: var(--space-md);
+}
+
+.week-analysis__section h4 {
+  margin: 0 0 8px 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.week-analysis__section ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
+.week-analysis__section li {
+  margin-bottom: 4px;
+}
+
+.week-analysis__section--good h4 { color: var(--color-success, #28a745); }
+.week-analysis__section--neutral h4 { color: var(--color-text-muted, #666); }
+.week-analysis__section--bad h4 { color: var(--color-error, #dc3545); }

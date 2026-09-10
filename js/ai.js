@@ -64,6 +64,27 @@ Reglas:
 - Apunta a variedad: no repitas proteína 2 días seguidos.
 - Cenas suelen ser más ligeras que los almuerzos.`,
 
+  systemPromptAnalysis: `Eres un asistente nutricional que analiza menús semanales para David y María.
+Vas a recibir una lista con las 14 comidas de la semana (7 días × comida + cena) y los valores nutricionales por ración de cada receta.
+
+Devuelve SOLO un objeto JSON válido (sin markdown, sin explicaciones fuera del JSON) con esta estructura exacta:
+
+{
+  "resumen": "2-3 frases con el panorama general del menú",
+  "bueno": ["...", "..."],
+  "equilibrado": ["...", "..."],
+  "malo": ["...", "..."]
+}
+
+Reglas:
+- "bueno", "equilibrado" y "malo" son arrays de strings cortos (1-2 frases cada uno). Si una categoría no aplica, devuelve [].
+- "bueno": aciertos del menú (variedad de proteínas, presencia de pescado/legumbres/verduras, cenas ligeras, equilibrio calórico…).
+- "equilibrado": observaciones neutrales o cosas mejorables que no son graves (ej: "las calorías son parejas pero...", "hay variedad de cocciones pero…").
+- "malo": problemas concretos (carbos o azúcares en cenas, repetición de receta/proteína 3+ veces, falta de verduras varios días, kcal muy dispares entre días, días con muy pocas kcal…).
+- Sé específico: menciona nombres de recetas concretas cuando critiques o elogie.
+- No inventes datos, analiza SOLO lo que te paso. Si una comida está vacía, mencionala.
+- Responde en español, tuteando.`,
+
   // Estado
   key: '',
   endpoint: '',
@@ -227,6 +248,36 @@ Reglas:
     const text = await this.call([
       { role: 'system', content: this.systemPromptRecipe },
       { role: 'user', content: `Receta: "${title}"` },
+    ], { json: true });
+    return this.extractJson(text);
+  },
+
+  // Analiza el menú completo de la semana: bueno / equilibrado / malo
+  async analyzeWeek(weekData, recipes) {
+    const days = Store.getDaysOrder();
+    const dayNames = { monday: 'lunes', tuesday: 'martes', wednesday: 'miércoles',
+                       thursday: 'jueves', friday: 'viernes', saturday: 'sábado', sunday: 'domingo' };
+    const lines = [];
+    for (const day of days) {
+      for (const meal of Store.getMealTypes()) {
+        const recipeId = weekData?.[day]?.[meal];
+        const recipe = recipeId ? recipes.find(r => r.id === recipeId) : null;
+        if (recipe) {
+          const n = recipe.nutricion || {};
+          lines.push(
+            `${dayNames[day]}-${meal}: ${recipe.nombre} ` +
+            `(cal:${n.cal ?? 0}, hc:${n.hc ?? 0}, prot:${n.proteinas ?? 0}, ` +
+            `grasas:${n.grasas ?? 0}, azucares:${n.azucares ?? 0})`
+          );
+        } else {
+          lines.push(`${dayNames[day]}-${meal}: (vacío)`);
+        }
+      }
+    }
+    const userPrompt = `Menú de la semana a analizar:\n${lines.join('\n')}`;
+    const text = await this.call([
+      { role: 'system', content: this.systemPromptAnalysis },
+      { role: 'user', content: userPrompt },
     ], { json: true });
     return this.extractJson(text);
   },
