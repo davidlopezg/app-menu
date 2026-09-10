@@ -11,6 +11,11 @@ const SUPABASE_URL  = 'https://flpxuyrtdmkqzzdcjqbr.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZscHh1eXJ0ZG1rcXp6ZGNqcWJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5NzE1MDcsImV4cCI6MjEwNDU0NzUwN30.dA9CmjXMkduZjDPUZw29IDPG3lPiSn-BrH3neGEzDxw';
 
 const DB = {
+  // Single source of truth: expuestos para que otros módulos (components.js,
+  // uploadToStorage, etc.) lean siempre los mismos valores que init() usa.
+  SUPABASE_URL,
+  SUPABASE_KEY: SUPABASE_ANON_KEY,
+
   client: null,
   _channel: null,
   _pulling: false,   // evita loops cuando pullAll dispara Store.set
@@ -506,13 +511,16 @@ const DB = {
       this._aiStatus('⚠️ No hay key guardada', 'warn');
       return;
     }
-    this._aiStatus('⏳ Probando...', 'pending');
+    this._aiStatus(
+      `⏳ Probando ${AI.provider} → ${AI.model} @ ${AI.endpoint.replace(/^https?:\/\//, '')}…`,
+      'pending'
+    );
     try {
       const text = await AI.call([
         { role: 'system', content: 'Responde SOLO con JSON: {"ok": true}' },
         { role: 'user', content: 'ok?' },
       ], { json: true });
-      this._aiStatus('✅ Key funciona. Respuesta: ' + text.slice(0, 80), 'ok');
+      this._aiStatus('✅ Key funciona (' + AI.provider + '). Respuesta: ' + text.slice(0, 80), 'ok');
     } catch (err) {
       this._aiStatus('❌ ' + err.message, 'error');
     }

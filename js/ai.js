@@ -10,12 +10,12 @@ const AI = {
 
   // Providers conocidos (el usuario puede editar el endpoint y modelo manualmente)
   PROVIDERS: {
-    'openai':     { endpoint: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini',                 name: 'OpenAI' },
-    'minimax':    { endpoint: 'https://api.minimaxi.com/v1/chat/completions', model: 'M2.7',           name: 'MiniMax' },
-    'mistral':    { endpoint: 'https://api.mistral.ai/v1/chat/completions',   model: 'mistral-small-latest',       name: 'Mistral' },
-    'groq':       { endpoint: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.1-8b-instant',  name: 'Groq (Llama)' },
-    'openrouter': { endpoint: 'https://openrouter.ai/api/v1/chat/completions', model: 'openai/gpt-4o-mini',       name: 'OpenRouter' },
-    'custom':     { endpoint: '', model: '',                                       name: 'Personalizado' },
+    'openai':     { endpoint: 'https://api.openai.com/v1/chat/completions',         model: 'gpt-4o-mini',           name: 'OpenAI' },
+    'minimax':    { endpoint: 'https://api.minimax.cn/v1/text/chatcompletion_v2', model: 'M2.7',                  name: 'MiniMax' },
+    'mistral':    { endpoint: 'https://api.mistral.ai/v1/chat/completions',         model: 'mistral-small-latest',  name: 'Mistral' },
+    'groq':       { endpoint: 'https://api.groq.com/openai/v1/chat/completions',     model: 'llama-3.1-8b-instant',  name: 'Groq (Llama)' },
+    'openrouter': { endpoint: 'https://openrouter.ai/api/v1/chat/completions',       model: 'openai/gpt-4o-mini',    name: 'OpenRouter' },
+    'custom':     { endpoint: '', model: '',                                         name: 'Personalizado' },
   },
 
   systemPromptRecipe: `Eres un asistente culinario experto en cocina mediterránea y española.
@@ -126,12 +126,21 @@ Reglas:
       temperature: opts.temperature ?? 0.6,
     };
     // Algunos providers no soportan response_format
-    if (opts.json && this.provider !== 'custom') {
+    if (opts.json && this.provider !== 'custom' && this.provider !== 'minimax') {
       body.response_format = { type: 'json_object' };
     }
 
     let res;
     try {
+      // Log útil para debug en DevTools (consola del navegador)
+      console.log('[AI] request →', {
+        provider: this.provider,
+        endpoint: this.endpoint,
+        model: this.model,
+        keyLen: this.key?.length || 0,
+        keyPrefix: this.key ? this.key.slice(0, 7) + '…' : '(empty)',
+      });
+
       res = await fetch(this.endpoint, {
         method: 'POST',
         headers: {
@@ -146,16 +155,49 @@ Reglas:
 
     if (!res.ok) {
       const txt = await res.text().catch(() => '');
+      // Log de la respuesta cruda para debug
+      console.warn('[AI] response error', res.status, txt);
+
+      // Info de contexto (qué provider/endpoint estaba configurado)
+      const ctx = `[provider=${this.provider}, endpoint=${this.endpoint}]`;
+
       let msg = '';
-      if (res.status === 401) msg = '401 Unauthorized: key inválida o endpoint incorrecto';
-      else if (res.status === 404) msg = '404 Not Found: el endpoint no existe (¿URL mal?)';
-      else if (res.status === 429) msg = '429 Too Many Requests: rate limit alcanzado';
-      else msg = `${res.status}: ${txt.slice(0, 200)}`;
+      if (res.status === 401) {
+        // MiniMax devuelve 401 con status_code 1004 en base_resp
+        let detail = '';
+        try {
+          const j = JSON.parse(txt);
+          const code = j?.base_resp?.status_code;
+          const smsg = j?.base_resp?.status_msg;
+          const apiMsg = j?.error?.message || j?.message;
+          if (code) detail = ` (code ${code}: ${smsg || 'key inválida'})`;
+          else if (apiMsg) detail = ` (${apiMsg})`;
+        } catch {}
+        msg = `401 Unauthorized${detail}. La key no es válida para este endpoint. ` +
+              `Revisá que el proveedor del dropdown coincida con el de tu key. ${ctx}`;
+      } else if (res.status === 403) {
+        msg = `403 Forbidden. La key es válida pero no tiene permisos (¿suscripción agotada?). ${ctx}`;
+      } else if (res.status === 404) {
+        msg = `404 Not Found. El endpoint no existe (¿URL mal escrita?). ${ctx}`;
+      } else if (res.status === 429) {
+        msg = `429 Too Many Requests. Rate limit alcanzado. ${ctx}`;
+      } else {
+        msg = `${res.status}: ${txt.slice(0, 200)} ${ctx}`;
+      }
       throw new Error(msg);
     }
 
     const data = await res.json();
-    const text = data.choices?.[0]?.message?.content || '';
+    // Extraer texto de varios formatos posibles (OpenAI, MiniMax, etc.)
+    const text = (
+      data.choices?.[0]?.message?.content ??  // OpenAI / MiniMax OpenAI-compatible
+      data.choices?.[0]?.text ??               // algunos
+      data.reply ??                            // MiniMax directo
+      data.text ??                             // generico
+      data.content ??                          // generico
+      data.message?.content ??                  // otro formato
+      ''
+    );
     return text;
   },
 
