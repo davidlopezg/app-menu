@@ -99,6 +99,23 @@ MÓDULO CLÍNICO (si el menú es para alguien en tratamiento activo de quimioter
 - Proteínas magras bien cocinadas (pollo/pavo/pescado al horno, huevo duro, legumbres cocidas, tofu).
 - Frutas y verduras bien lavadas, peladas o cocinadas.
 
+=== METAS SEMANALES CUANTITATIVAS (targets David & María) ===
+
+Al evaluar, contá cuántas veces aparece cada categoría en las 14 comidas de la semana y compará con estas metas. Usá el NOMBRE de la receta + el campo 'tipo' + los 'tags' para clasificar.
+
+- Pescado azul 2-3×/sem (salmón, sardinas, caballa, atún, anchoas, chicharro).
+- Legumbres 2-3×/sem (lentejas, garbanzos, judías, habichuelas, soja, edamame).
+- Pollo o pavo 2-3×/sem (carnes blancas magras).
+- Carne roja ≤1×/sem (ternera, cordero, cerdo — este último si es magro).
+- Huevos 2-3×/sem (tortilla, revuelto, duro, pochado).
+- Verdura presente en comida Y cena todos los días (cero días sin verdura en alguna comida).
+- Cocciones suaves: horno, vapor, salteado, hervido, guiso. PENALIZAR fritura, plancha muy intensa, barbacoa.
+- Cenas SIN o con muy pocos carbohidratos refinados (hc ≤ 20 g/ración aprox). Las cenas con legumbres, verdura, pescado o huevo son ideales.
+- Aceite de oliva como grasa principal (penalizar mantequcilla, margarina, grasas saturadas).
+- Fibra 20-30 g/día: cereales INTEGRALES (no refinados) + legumbres + verdura. Si todo es harina blanca, penalizar.
+
+Clasificá cada receta por nombre + tags. Si dudás (ej: "Pollo a la parmesana" = pollo pero frito y con queso), usá el nombre como guía y marcalo con la advertencia correspondiente.
+
 === FORMATO DE SALIDA (JSON estricto) ===
 
 Devuelve SOLO un objeto JSON válido (sin markdown, sin texto fuera del JSON) con esta estructura EXACTA:
@@ -314,8 +331,11 @@ Otras reglas:
         const recipe = recipeId ? recipes.find(r => r.id === recipeId) : null;
         if (recipe) {
           const n = recipe.nutricion || {};
+          const tipo = recipe.tipoComida || 'ambos';
+          const tags = (recipe.tags || []).join(',') || '-';
           lines.push(
             `${dayNames[day]}-${meal}: ${recipe.nombre} ` +
+            `[tipo:${tipo}, tags:${tags}] ` +
             `(cal:${n.cal ?? 0}, hc:${n.hc ?? 0}, prot:${n.proteinas ?? 0}, ` +
             `grasas:${n.grasas ?? 0}, azucares:${n.azucares ?? 0})`
           );
