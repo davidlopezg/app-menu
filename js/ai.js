@@ -11,7 +11,7 @@ const AI = {
   // Providers conocidos (el usuario puede editar el endpoint y modelo manualmente)
   PROVIDERS: {
     'openai':     { endpoint: 'https://api.openai.com/v1/chat/completions',         model: 'gpt-4o-mini',           name: 'OpenAI' },
-    'minimax':    { endpoint: 'https://api.minimax.cn/v1/text/chatcompletion_v2', model: 'M2.7',                  name: 'MiniMax' },
+    'minimax':    { endpoint: 'https://api.minimax.io/v1',                          model: 'MiniMax M3',            name: 'MiniMax' },
     'mistral':    { endpoint: 'https://api.mistral.ai/v1/chat/completions',         model: 'mistral-small-latest',  name: 'Mistral' },
     'groq':       { endpoint: 'https://api.groq.com/openai/v1/chat/completions',     model: 'llama-3.1-8b-instant',  name: 'Groq (Llama)' },
     'openrouter': { endpoint: 'https://openrouter.ai/api/v1/chat/completions',       model: 'openai/gpt-4o-mini',    name: 'OpenRouter' },
