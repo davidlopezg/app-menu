@@ -331,7 +331,8 @@ const Components = {
     `).join('');
 
     return `
-      <form id="recipe-form" class="recipe-form">
+      <form id="recipe-form" class="recipe-form"
+            onsubmit="App.saveRecipe(${isEdit}); return false;">
         <input type="hidden" name="id" value="${recipe?.id || ''}">
 
         <div class="form-group">

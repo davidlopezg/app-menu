@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v23 (2025-09-10)',
+  VERSION: 'v24 (2025-09-10)',
 
   // ============================================
   // Initialize
@@ -1041,12 +1041,7 @@ const App = {
 
     const main = document.getElementById('main-content');
     main.innerHTML = Components.recipeForm(recipe, isEdit);
-
-    // Form submit handler
-    document.getElementById('recipe-form').addEventListener('submit', (e) => {
-      e.preventDefault();
-      this.saveRecipe(isEdit);
-    });
+    // El submit se maneja inline con onsubmit en el form (más confiable)
   },
 
   // ============================================
@@ -1221,10 +1216,7 @@ const App = {
       return;
     }
     Components.modal.open(T.recipe.editRecipe, Components.recipeForm(recipe, true));
-    document.getElementById('recipe-form').addEventListener('submit', (e) => {
-      e.preventDefault();
-      this.saveRecipe(true);
-    });
+    // El submit se maneja inline con onsubmit en el form (más confiable)
   },
 
   // ========== AI: completar ingredientes y pasos de una receta ==========
