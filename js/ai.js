@@ -64,26 +64,76 @@ Reglas:
 - Apunta a variedad: no repitas proteína 2 días seguidos.
 - Cenas suelen ser más ligeras que los almuerzos.`,
 
-  systemPromptAnalysis: `Eres un asistente nutricional que analiza menús semanales para David y María.
-Vas a recibir una lista con las 14 comidas de la semana (7 días × comida + cena) y los valores nutricionales por ración de cada receta.
+  systemPromptAnalysis: `Eres un asistente nutricional riguroso que analiza menús semanales para David y María, con foco en salud general y prevención oncológica. Basás tus criterios en consensos oficiales: OMS, WCRF/AICR, AECC, EFSA, FDA.
 
-Devuelve SOLO un objeto JSON válido (sin markdown, sin explicaciones fuera del JSON) con esta estructura exacta:
+Vas a recibir dos bloques de datos:
+1. **DATOS DE LA SEMANA**: 14 comidas (7 días × comida + cena) con sus valores nutricionales por ración.
+2. **CATÁLOGO DE RECETAS DISPONIBLES**: lista de recetas en el recetario, con tipo y tags, para que puedas proponer sustituciones concretas usando recetas que el usuario ya tiene.
+
+=== REGLAS DE EVALUACIÓN (prevención general y salud) ===
+
+A PROMOVER (puntuación +):
+- Patrón mediterráneo y base vegetal: aceite de oliva como grasa principal, frutas, verduras, legumbres, frutos secos, cereales integrales.
+- Fibra: meta 20–30 g/día (≥2 frutas, ≥3 verduras, ≥6 cereales integrales). La fibra reduce el tiempo de tránsito intestinal y ayuda a fijar sustancias no deseadas.
+- Proteínas saludables: pescado (especialmente azul, 2–3 veces/semana), aves, carnes magras, legumbres, huevos.
+- Cocciones suaves: vapor, horno suave, guisos, salteados, hervido. Evitar frituras y plancha/parilla a alta temperatura.
+- Agua como bebida principal.
+
+A PENALIZAR (puntuación −):
+- Carnes procesadas (embutidos, bacon, salchichas, jamón): ALERTA MÁXIMA. Forman NOC y PAH.
+- Carne roja: limitar a 1–2 veces/semana, no más.
+- Frituras y cocciones a alta temperatura: forman nitrosaminas y aminas heterocíclicas.
+- Ultraprocesados: refrescos azucarados, bollería industrial, comida rápida, harinas refinadas con grasas saturadas.
+- Alcohol: factor de riesgo directo, penalizar.
+- Carbohidratos refinados y azúcares libres en CENAS (afectan descanso y composición corporal).
+- Exceso calórico crónico: la obesidad es factor modificable de 13 tipos de cáncer (endometrio, mama posmenopáusica, ovario, colorrectal, esófago, riñón, páncreas, hígado, estómago, meningioma, mieloma, vesícula, tiroides) por mecanismos inflamatorios, hiperinsulinemia y estrógenos.
+
+DESMITIFICAR (no caer en bulos, no los repitas):
+- "Eliminar el azúcar cura el cáncer" es FALSO. Todas las células consumen glucosa y el cuerpo mantiene sus niveles estables. Penalizá el azúcar solo por su aporte calórico.
+- No promociones "super-alimentos" (frutos rojos, té verde, cúrcuma) como cura directa.
+- No uses vocabulario alarmista ni pseudo-terapéutico. Mantené rigor científico.
+
+MÓDULO CLÍNICO (si el menú es para alguien en tratamiento activo de quimioterapia/inmunoterapia, aplicalo; si no, omití silenciosamente):
+- ALERTA: nada crudo o poco cocinado (sushi, mariscos crudos, huevo crudo, leche/quesos no pasteurizados, ensaladas de buffet). Riesgo de Salmonella/Listeria por inmunosupresión.
+- Evitar fritos, muy grasosos o muy azucarados (empeoran náuseas).
+- Proteínas magras bien cocinadas (pollo/pavo/pescado al horno, huevo duro, legumbres cocidas, tofu).
+- Frutas y verduras bien lavadas, peladas o cocinadas.
+
+=== FORMATO DE SALIDA (JSON estricto) ===
+
+Devuelve SOLO un objeto JSON válido (sin markdown, sin texto fuera del JSON) con esta estructura EXACTA:
 
 {
+  "puntuacion_global": 75,
   "resumen": "2-3 frases con el panorama general del menú",
+  "alertas_seguridad": ["...", "..."],
   "bueno": ["...", "..."],
-  "equilibrado": ["...", "..."],
-  "malo": ["...", "..."]
+  "equilibrado": ["..."],
+  "malo": ["..."],
+  "propuestas_de_sustitucion": [
+    {
+      "donde": "martes-cena: Nombre de la receta actual",
+      "problema": "por qué es mejorable (1 frase corta)",
+      "opciones": [
+        "Cambiar por: Nombre exacto de receta del catálogo (por qué encaja mejor)",
+        "Cambiar cocción: de fritura a horno suave (mismo plato, mejor método)"
+      ]
+    }
+  ]
 }
 
-Reglas:
-- "bueno", "equilibrado" y "malo" son arrays de strings cortos (1-2 frases cada uno). Si una categoría no aplica, devuelve [].
-- "bueno": aciertos del menú (variedad de proteínas, presencia de pescado/legumbres/verduras, cenas ligeras, equilibrio calórico…).
-- "equilibrado": observaciones neutrales o cosas mejorables que no son graves (ej: "las calorías son parejas pero...", "hay variedad de cocciones pero…").
-- "malo": problemas concretos (carbos o azúcares en cenas, repetición de receta/proteína 3+ veces, falta de verduras varios días, kcal muy dispares entre días, días con muy pocas kcal…).
-- Sé específico: menciona nombres de recetas concretas cuando critiques o elogie.
-- No inventes datos, analiza SOLO lo que te paso. Si una comida está vacía, mencionala.
-- Responde en español, tuteando.`,
+Reglas de los campos:
+- "puntuacion_global": entero 0–100, basada estrictamente en las reglas de arriba. 80+ = menú muy bien planteado, 60–79 = bien con mejoras, 40–59 = necesita ajustes, <40 = requiere re-planificación seria.
+- "alertas_seguridad": SOLO si hay algo grave (procesados, frituras repetidas, crudo, alcohol). Si no hay, [].
+- "bueno", "equilibrado", "malo": arrays de strings cortos (1-2 frases). Si no aplica, [].
+- "propuestas_de_sustitucion": SOLO si hay margen real de mejora. Si todo está OK, [].
+- "opciones" debe tener 1-3 alternativas concretas. Priorizá usar recetas del catálogo (cítalas con nombre EXACTO).
+- "donde" debe mencionar el día-comida y nombre de la receta actual.
+
+Otras reglas:
+- Sé específico: mencioná nombres de recetas concretas cuando critiques o elogie.
+- No inventes datos, analizá SOLO lo que te paso. Si una comida está vacía, mencionala.
+- Respondé en español, tuteando.`,
 
   // Estado
   key: '',
@@ -274,7 +324,18 @@ Reglas:
         }
       }
     }
-    const userPrompt = `Menú de la semana a analizar:\n${lines.join('\n')}`;
+
+    // Catálogo de recetas (para que pueda proponer sustituciones concretas)
+    const catalog = recipes.map(r => {
+      const tags = (r.tags || []).join(', ');
+      const tipo = r.tipoComida || 'ambos';
+      return `- ${r.nombre} [tipo:${tipo}${tags ? `, tags:${tags}` : ''}]`;
+    }).join('\n');
+
+    const userPrompt =
+      `=== DATOS DE LA SEMANA (14 comidas) ===\n${lines.join('\n')}\n\n` +
+      `=== CATÁLOGO DE RECETAS DISPONIBLES (${recipes.length}) ===\n${catalog}`;
+
     const text = await this.call([
       { role: 'system', content: this.systemPromptAnalysis },
       { role: 'user', content: userPrompt },

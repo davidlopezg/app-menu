@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v19 (2025-09-10)',
+  VERSION: 'v20 (2025-09-10)',
 
   // ============================================
   // Initialize
@@ -302,10 +302,35 @@ const App = {
     const renderList = (arr) =>
       (arr || []).map(s => `<li>${Components.escapeHtml(s)}</li>`).join('');
 
+    // Color del score: verde >=80, amarillo 60-79, naranja 40-59, rojo <40
+    const score = typeof data.puntuacion_global === 'number' ? data.puntuacion_global : null;
+    const scoreClass = score == null ? ''
+      : score >= 80 ? 'week-analysis__score--great'
+      : score >= 60 ? 'week-analysis__score--ok'
+      : score >= 40 ? 'week-analysis__score--warn'
+      : 'week-analysis__score--bad';
+
+    const subs = data.propuestas_de_sustitucion || [];
+
     Components.modal.open('📊 Análisis de la semana', `
       <div class="week-analysis">
         <p class="week-analysis__age">${ageText}</p>
+
+        ${score != null ? `
+          <div class="week-analysis__score ${scoreClass}">
+            <div class="week-analysis__score-num">${score}</div>
+            <div class="week-analysis__score-label">/ 100</div>
+          </div>
+        ` : ''}
+
         ${data.resumen ? `<p class="week-analysis__resumen">${Components.escapeHtml(data.resumen)}</p>` : ''}
+
+        ${(data.alertas_seguridad || []).length ? `
+          <div class="week-analysis__alerts">
+            <h4>🚨 Alertas de seguridad</h4>
+            <ul>${renderList(data.alertas_seguridad)}</ul>
+          </div>
+        ` : ''}
 
         ${(data.bueno || []).length ? `
           <div class="week-analysis__section week-analysis__section--good">
@@ -325,6 +350,21 @@ const App = {
           <div class="week-analysis__section week-analysis__section--bad">
             <h4>⚠️ A revisar</h4>
             <ul>${renderList(data.malo)}</ul>
+          </div>
+        ` : ''}
+
+        ${subs.length ? `
+          <div class="week-analysis__section week-analysis__section--subs">
+            <h4>💡 Sustituciones sugeridas</h4>
+            ${subs.map(s => `
+              <div class="week-analysis__sub">
+                <div class="week-analysis__sub-where"><strong>${Components.escapeHtml(s.donde || '')}</strong></div>
+                <div class="week-analysis__sub-problem">${Components.escapeHtml(s.problema || '')}</div>
+                <ul class="week-analysis__sub-opts">
+                  ${(s.opciones || []).map(o => `<li>${Components.escapeHtml(o)}</li>`).join('')}
+                </ul>
+              </div>
+            `).join('')}
           </div>
         ` : ''}
 
