@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v25 (2025-09-11)',
+  VERSION: 'v26 (2025-09-11)',
 
   // ============================================
   // Initialize
@@ -1242,8 +1242,12 @@ const App = {
 
     try {
       const result = await AI.completeRecipe(recipe.nombre);
-      const ings = result.ingredientes || [];
-      const pasos = result.pasos || [];
+
+      // Normalizar la respuesta de la IA: la API a veces devuelve
+      // los ingredientes con nombres de campo en inglés (name/quantity/unit)
+      // o como strings sueltos. Acá lo pasamos todo al formato interno.
+      const ings = AI.normalizeIngredients(result.ingredients ?? result.ingredientes);
+      const pasos = AI.normalizeSteps(result.steps ?? result.pasos);
 
       if (ings.length === 0 && pasos.length === 0) {
         Components.modal.open('🤖 Sin resultados', `
@@ -1257,6 +1261,11 @@ const App = {
         return;
       }
 
+      // Guardamos los datos normalizados en App para que el botón
+      // "Guardar" los lea sin necesidad de inline JSON (que es frágil
+      // y se rompe con comillas, saltos de línea, etc.).
+      App._aiRecipeSuggestion = { id, ingredientes: ings, pasos };
+
       // Mostrar preview + opción de aplicar o descartar
       const previewHtml = `
         <div style="padding: var(--space-md);">
@@ -1268,7 +1277,7 @@ const App = {
           ${ings.length > 0 ? `
             <h4 style="margin-bottom: 8px;">Ingredientes (${ings.length})</h4>
             <ul style="margin-bottom: 16px; padding-left: 20px;">
-              ${ings.map(i => `<li>${Components.escapeHtml(i.nombre)} ${i.cantidad ? '(' + Components.escapeHtml(i.cantidad) + ' ' + (i.unidad || '') + ')' : ''}</li>`).join('')}
+              ${ings.map(i => `<li>${Components.escapeHtml(i.nombre)} ${i.cantidad ? '(' + Components.escapeHtml(i.cantidad) + ' ' + Components.escapeHtml(i.unidad || '') + ')' : ''}</li>`).join('')}
             </ul>
           ` : ''}
 
@@ -1283,8 +1292,7 @@ const App = {
             <button class="btn btn--outline" onclick="Components.modal.close()">
               Descartar
             </button>
-            <button class="btn btn--primary" style="flex: 1;"
-                    onclick="App.applyAiRecipe('${id}', ${JSON.stringify(ings).replace(/"/g, '&quot;')}, ${JSON.stringify(pasos).replace(/"/g, '&quot;')})">
+            <button class="btn btn--primary" style="flex: 1;" id="btn-apply-ai-recipe">
               💾 Guardar en la receta
             </button>
           </div>
@@ -1294,6 +1302,10 @@ const App = {
         </div>
       `;
       Components.modal.open('🤖 Receta sugerida', previewHtml);
+
+      // Bind del botón después de renderizar (evita inline JSON frágil)
+      const btn = document.getElementById('btn-apply-ai-recipe');
+      if (btn) btn.onclick = () => App.applyAiRecipeFromSuggestion();
     } catch (err) {
       console.error(err);
       Components.modal.open('🤖 Error', `
@@ -1319,6 +1331,19 @@ const App = {
     Components.toast.show('✅ Receta actualizada con IA');
     Components.modal.close();
     this.renderRecipeDetail(id);
+  },
+
+  // Variante que lee los datos de _aiRecipeSuggestion (estado seguro,
+  // no inline JSON en el onclick). Es lo que llama el botón del modal
+  // de sugerencia de IA.
+  applyAiRecipeFromSuggestion() {
+    const s = this._aiRecipeSuggestion;
+    if (!s || !s.id) {
+      Components.toast.show('❌ No hay sugerencia de IA para aplicar');
+      return;
+    }
+    this._aiRecipeSuggestion = null;
+    this.applyAiRecipe(s.id, s.ingredientes, s.pasos);
   },
 
   saveRecipe(isEdit = false) {

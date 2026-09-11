@@ -306,6 +306,67 @@ Otras reglas:
     }
   },
 
+  // Normaliza la lista de ingredientes que devuelve la IA al formato
+  // interno { nombre, cantidad, unidad }. Acepta:
+  //   - objetos con campos en español ({nombre, cantidad, unidad})
+  //   - objetos con campos en inglés ({name, quantity, unit, amount})
+  //   - strings sueltos ("Patata 300g") — en ese caso intenta parsear
+  // Si la IA devuelve algo irreconocible, devuelve [].
+  normalizeIngredients(raw) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (const item of raw) {
+      if (!item) continue;
+      if (typeof item === 'string') {
+        // string suelto: "Patatas 300g" o "4 huevos"
+        const parsed = this._parseIngredientString(item);
+        if (parsed) out.push(parsed);
+        continue;
+      }
+      if (typeof item !== 'object') continue;
+
+      // Aceptar nombres en español O inglés (la API a veces cambia)
+      const nombre = item.nombre ?? item.name ?? item.ingredient ?? item.ingrediente ?? '';
+      const cantidad = item.cantidad ?? item.quantity ?? item.amount ?? item.qty ?? '';
+      const unidad = item.unidad ?? item.unit ?? item.uom ?? '';
+      if (!nombre || !String(nombre).trim()) continue;
+      out.push({
+        nombre: String(nombre).trim(),
+        cantidad: String(cantidad ?? '').trim(),
+        unidad: String(unidad ?? '').trim() || 'none',
+      });
+    }
+    return out;
+  },
+
+  // Heurística: "Patatas 300g" → {nombre: "Patatas", cantidad: "300", unidad: "g"}
+  _parseIngredientString(s) {
+    if (!s || typeof s !== 'string') return null;
+    const m = s.trim().match(/^(.+?)\s+(\d+(?:[.,]\d+)?)\s*([a-zA-Z]+|cda|cdita|taza|ud)?$/);
+    if (m) {
+      return {
+        nombre: m[1].trim(),
+        cantidad: m[2].replace(',', '.'),
+        unidad: (m[3] || 'none').trim(),
+      };
+    }
+    return { nombre: s.trim(), cantidad: '', unidad: 'none' };
+  },
+
+  // Normaliza la lista de pasos. Acepta strings o {text, paso}.
+  normalizeSteps(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map(s => {
+        if (typeof s === 'string') return s.trim();
+        if (s && typeof s === 'object') {
+          return String(s.paso ?? s.text ?? s.step ?? s.descripcion ?? '').trim();
+        }
+        return '';
+      })
+      .filter(Boolean);
+  },
+
   // ============================================
   // Acciones de alto nivel
   // ============================================
