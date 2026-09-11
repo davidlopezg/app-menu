@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v24 (2025-09-10)',
+  VERSION: 'v25 (2025-09-11)',
 
   // ============================================
   // Initialize
@@ -1323,76 +1323,95 @@ const App = {
 
   saveRecipe(isEdit = false) {
     const form = document.getElementById('recipe-form');
-    
-    // Collect data
-    const id = form.querySelector('[name="id"]').value;
-    const nombre = form.querySelector('[name="nombre"]').value.trim();
-    
-    if (!nombre) {
-      Components.toast.show(T.validation.nameRequired);
+    if (!form) {
+      console.error('[saveRecipe] No se encontró el formulario');
+      Components.toast.show('❌ Error: no se encontró el formulario');
       return;
     }
 
-    // Ingredients
-    const ingredients = [];
-    const names = form.querySelectorAll('[name="ing_nombre[]"]');
-    const quantities = form.querySelectorAll('[name="ing_cantidad[]"]');
-    const units = form.querySelectorAll('[name="ing_unidad[]"]');
+    try {
+      // Collect data
+      const id = form.querySelector('[name="id"]').value;
+      const nombre = form.querySelector('[name="nombre"]').value.trim();
 
-    names.forEach((input, i) => {
-      if (input.value.trim()) {
-        ingredients.push({
-          nombre: input.value.trim(),
-          cantidad: quantities[i].value.trim(),
-          unidad: units[i].value || 'none'
-        });
+      if (!nombre) {
+        Components.toast.show(T.validation.nameRequired);
+        return;
       }
-    });
 
-    // Steps
-    const pasos = [];
-    form.querySelectorAll('[name="pasos[]"]').forEach(textarea => {
-      if (textarea.value.trim()) {
-        pasos.push(textarea.value.trim());
+      // Ingredients
+      const ingredients = [];
+      const names = form.querySelectorAll('[name="ing_nombre[]"]');
+      const quantities = form.querySelectorAll('[name="ing_cantidad[]"]');
+      const units = form.querySelectorAll('[name="ing_unidad[]"]');
+
+      names.forEach((input, i) => {
+        if (input.value.trim()) {
+          ingredients.push({
+            nombre: input.value.trim(),
+            cantidad: quantities[i].value.trim(),
+            unidad: units[i].value || 'none'
+          });
+        }
+      });
+
+      // Steps
+      const pasos = [];
+      form.querySelectorAll('[name="pasos[]"]').forEach(textarea => {
+        if (textarea.value.trim()) {
+          pasos.push(textarea.value.trim());
+        }
+      });
+
+      // Nutrition
+      const nutricion = {
+        cal: parseInt(form.querySelector('[name="nut_cal"]').value) || 0,
+        hc: parseInt(form.querySelector('[name="nut_hc"]').value) || 0,
+        proteinas: parseInt(form.querySelector('[name="nut_proteinas"]').value) || 0,
+        grasas: parseInt(form.querySelector('[name="nut_grasas"]').value) || 0
+      };
+
+      const recipeData = {
+        nombre,
+        ingredientes,
+        pasos,
+        nutricion,
+        imagen: (form.querySelector('[name="imagen"]')?.value || '').trim(),
+        tipoComida: form.querySelector('[name="tipoComida"]:checked')?.value || 'ambos',
+        tags: (form.querySelector('[name="tags"]')?.value || '')
+                .split(',')
+                .map(t => t.trim().toLowerCase())
+                .filter(Boolean),
+        link: (form.querySelector('[name="link"]')?.value || '').trim(),
+      };
+
+      if (isEdit && id) {
+        Recipes.update(id, recipeData);
+      } else {
+        Recipes.create(recipeData);
       }
-    });
 
-    // Nutrition
-    const nutricion = {
-      cal: parseInt(form.querySelector('[name="nut_cal"]').value) || 0,
-      hc: parseInt(form.querySelector('[name="nut_hc"]').value) || 0,
-      proteinas: parseInt(form.querySelector('[name="nut_proteinas"]').value) || 0,
-      grasas: parseInt(form.querySelector('[name="nut_grasas"]').value) || 0
-    };
+      // Verificación defensiva: si la receta sigue en memoria, el save
+      // funcionó. Útil para detectar casos raros (cuota de localStorage
+      // llena, JSON circular, etc.) y avisarle al usuario.
+      const savedId = id || (Recipes.getAll()[Recipes.getAll().length - 1]?.id);
+      const saved = savedId ? Recipes.getById(savedId) : null;
+      if (!saved) {
+        throw new Error('La receta no se encontró después de guardar');
+      }
 
-    const recipeData = {
-      nombre,
-      ingredientes,
-      pasos,
-      nutricion,
-      imagen: (form.querySelector('[name="imagen"]')?.value || '').trim(),
-      tipoComida: form.querySelector('[name="tipoComida"]:checked')?.value || 'ambos',
-      tags: (form.querySelector('[name="tags"]')?.value || '')
-              .split(',')
-              .map(t => t.trim().toLowerCase())
-              .filter(Boolean),
-      link: (form.querySelector('[name="link"]')?.value || '').trim(),
-    };
-
-    if (isEdit && id) {
-      Recipes.update(id, recipeData);
-    } else {
-      Recipes.create(recipeData);
-    }
-
-    Components.toast.show(T.toast.recipeSaved);
-    Components.modal.close();
-    // Si estabamos editando, refrescar el detalle con los nuevos datos.
-    // Si era nueva, ir a la lista de recetas.
-    if (id) {
-      this.renderRecipeDetail(id);
-    } else {
-      this.navigate('recipes');
+      Components.toast.show(T.toast.recipeSaved);
+      Components.modal.close();
+      // Si estabamos editando, refrescar el detalle con los nuevos datos.
+      // Si era nueva, ir a la lista de recetas.
+      if (id) {
+        this.renderRecipeDetail(id);
+      } else {
+        this.navigate('recipes');
+      }
+    } catch (err) {
+      console.error('[saveRecipe] Error guardando receta:', err);
+      Components.toast.show('❌ No se pudo guardar: ' + (err.message || err));
     }
   },
 

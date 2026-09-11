@@ -226,11 +226,19 @@ const DB = {
       tipo_comida: r.tipoComida,
       imagen: r.imagen,
       tags: r.tags,
+      link: r.link || '',
       fecha_creacion: r.fechaCreacion,
       updated_at: new Date().toISOString()
     }));
     const { error } = await this.client.from('recipes').upsert(rows);
-    if (error) console.error('pushRecipes:', error);
+    if (error) {
+      console.error('pushRecipes:', error);
+      // Surface error so the user knows the cloud sync failed
+      // (localStorage save ya pasó, esto solo es aviso)
+      if (typeof Components !== 'undefined' && Components.toast) {
+        Components.toast.show('⚠️ Guardé localmente pero no se sincronizó a la nube');
+      }
+    }
   },
 
   async pushMenu(menu) {

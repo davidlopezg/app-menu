@@ -332,7 +332,7 @@ const Components = {
 
     return `
       <form id="recipe-form" class="recipe-form"
-            onsubmit="App.saveRecipe(${isEdit}); return false;">
+            onsubmit="event.preventDefault(); App.saveRecipe(${isEdit});">
         <input type="hidden" name="id" value="${recipe?.id || ''}">
 
         <div class="form-group">
