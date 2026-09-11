@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v26 (2025-09-11)',
+  VERSION: 'v27 (2025-09-11)',
 
   // ============================================
   // Initialize
@@ -1365,14 +1365,14 @@ const App = {
       }
 
       // Ingredients
-      const ingredients = [];
+      const ingredientes = [];
       const names = form.querySelectorAll('[name="ing_nombre[]"]');
       const quantities = form.querySelectorAll('[name="ing_cantidad[]"]');
       const units = form.querySelectorAll('[name="ing_unidad[]"]');
 
       names.forEach((input, i) => {
         if (input.value.trim()) {
-          ingredients.push({
+          ingredientes.push({
             nombre: input.value.trim(),
             cantidad: quantities[i].value.trim(),
             unidad: units[i].value || 'none'
