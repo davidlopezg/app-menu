@@ -522,6 +522,11 @@ const DB = {
   },
 
   // Fuerza la descarga de la ultima version del SW y recarga.
+  // FIX: antes mentía con "Si hay nueva versión" aunque NO la hubiera, y
+  // recargaba siempre a los 2.5s (aunque el SW nuevo todavía estaba instalando,
+  // así que el reload caía con el SW viejo controlando → veías lo mismo).
+  // Ahora: chequea de verdad si hay nueva versión, espera a que se active,
+  // y avisa correctamente cuando NO hay nada nuevo.
   async forceAppUpdate() {
     if (!('serviceWorker' in navigator)) {
       Components.toast.show('Tu navegador no soporta actualizaciones automaticas');
@@ -534,22 +539,94 @@ const DB = {
         Components.toast.show('No hay service worker registrado');
         return;
       }
-      // update() chequea el servidor por un sw.js nuevo
-      await reg.update();
-      // Si hay un SW esperando, activarlo ya
+
+      // Caso 1: ya hay un SW esperando activación (de un update previo).
+      // Activarlo y recargar.
       if (reg.waiting) {
         reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        await this._waitForControllerChange(2000);
+        window.location.reload();
+        return;
       }
-      // Si hay uno instalando, el listener updatefound del index.html
-      // se va a encargar de recargar cuando termine
-      setTimeout(() => {
-        Components.toast.show('Si hay una version nueva, la pagina se recargara');
-        setTimeout(() => window.location.reload(), 1500);
-      }, 1000);
+
+      // Caso 2: hay uno instalándose ahora mismo. Esperar a que se active.
+      if (reg.installing) {
+        await this._waitForWorkerState(reg.installing, 'activated', 10000);
+        window.location.reload();
+        return;
+      }
+
+      // Caso 3: no hay nada pendiente. Forzar update() y escuchar updatefound.
+      // Si updatefound NO se dispara en ~3s, no hay nueva versión.
+      let newVersionDetected = false;
+      const onUpdateFound = () => {
+        const worker = reg.installing;
+        if (!worker) return;
+        newVersionDetected = true;
+        worker.addEventListener('statechange', () => {
+          if (worker.state === 'activated') {
+            // El nuevo SW tomó control. La página necesita recargar
+            // para que sirva los assets nuevos.
+            window.location.reload();
+          }
+        });
+      };
+      reg.addEventListener('updatefound', onUpdateFound);
+
+      await reg.update();
+
+      // Esperar un poco para que el evento updatefound se dispare si hay nueva versión.
+      // El SW tarda en instalar (cachea ~14 assets), así que 4s es prudente.
+      await new Promise(r => setTimeout(r, 4000));
+
+      reg.removeEventListener('updatefound', onUpdateFound);
+
+      if (!newVersionDetected) {
+        Components.toast.show('✅ Ya tenés la última versión');
+      } else {
+        // updatefound se disparó pero el SW todavía no llegó a 'activated'
+        // en los 4s de espera. Avisar y dejar que el usuario recargue manual.
+        Components.toast.show('⚠️ Actualización detectada. Si no se recarga sola, tocá Actualizar de nuevo.');
+      }
     } catch (err) {
       console.error(err);
       Components.toast.show('Error: ' + err.message);
     }
+  },
+
+  // Helpers para forceAppUpdate: esperas con timeout en eventos del SW.
+  _waitForControllerChange(timeoutMs = 2000) {
+    return new Promise((resolve) => {
+      const onChange = () => { resolve(); cleanup(); };
+      const t = setTimeout(() => { resolve(); cleanup(); }, timeoutMs);
+      function cleanup() {
+        navigator.serviceWorker.removeEventListener('controllerchange', onChange);
+        clearTimeout(t);
+      }
+      navigator.serviceWorker.addEventListener('controllerchange', onChange, { once: true });
+    });
+  },
+
+  _waitForWorkerState(worker, targetState, timeoutMs = 10000) {
+    return new Promise((resolve, reject) => {
+      if (worker.state === targetState) return resolve();
+      const t = setTimeout(() => {
+        worker.removeEventListener('statechange', onStateChange);
+        reject(new Error(`Timeout esperando SW ${targetState} (estado actual: ${worker.state})`));
+      }, timeoutMs);
+      const onStateChange = () => {
+        if (worker.state === targetState) {
+          clearTimeout(t);
+          worker.removeEventListener('statechange', onStateChange);
+          resolve();
+        } else if (worker.state === 'redundant') {
+          clearTimeout(t);
+          worker.removeEventListener('statechange', onStateChange);
+          reject(new Error('SW redundant'));
+        }
+      };
+      worker.addEventListener('statechange', onStateChange);
+    });
   },
 
   // ============================================
