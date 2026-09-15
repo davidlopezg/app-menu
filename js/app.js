@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v27 (2025-09-11)',
+  VERSION: 'v28 (2025-09-15)',
 
   // ============================================
   // Initialize
@@ -632,12 +632,13 @@ const App = {
       Components.toast.show(`⚠️ ${missing.length} recetas no encontradas: ${missing.slice(0,2).join(', ')}${missing.length>2?'...':''}`);
     }
 
-    // Guardar directamente en Supabase via DB.pushMenu (que ya existe)
-    const currentMenu = Menu._menu || {};
+    // Guardar localmente + disparar sync hook (DB.pushMenu) automáticamente
+    // via Menu._save() → Store.set → sync hook. Antes se hacía un push directo
+    // y se asignaba Menu._menu sin persistir localmente, lo que provocaba
+    // pérdida del menú si la nube rechazaba el upsert.
     const wk = Menu.getWeekKey();
-    currentMenu[wk] = menuData;
-    await DB.pushMenu(currentMenu);
-    Menu._menu = currentMenu;
+    Menu._menu[wk] = menuData;
+    Menu._save();
 
     Components.toast.show(`✅ Menú aplicado (${found} celdas)`);
     Components.modal.close();
@@ -1519,10 +1520,37 @@ const App = {
     return `
       <div class="app-footer">
         <span>${App.VERSION}</span>
-        ${DB.isAuth() ? '<span class="app-footer__sync">\u2713 sincronizado</span>' : ''}
+        <span id="sync-indicator">${this._renderSyncIndicatorInner()}</span>
       </div>`;
-  }
+  },
+
+  // Renderiza SOLO el contenido del indicador de sync (✓ / ⚠️).
+  // Se llama tanto al pintar el footer como al actualizarlo por evento.
+  _renderSyncIndicatorInner() {
+    if (!DB.isAuth()) return '';
+    const pending = DB._pendingSyncErrors || 0;
+    if (pending > 0) {
+      return `<span class="app-footer__sync app-footer__sync--error" title="${pending} cambio(s) sin sincronizar a la nube">⚠️ ${pending} sin sincronizar</span>`;
+    }
+    return '<span class="app-footer__sync" title="Todos los cambios están en la nube">✓ sincronizado</span>';
+  },
+
+  // Actualiza solo el span del indicador sin re-renderizar la vista.
+  // Se dispara cuando DB emite el evento "db:sync-state-changed".
+  _updateSyncIndicator() {
+    const el = document.getElementById('sync-indicator');
+    if (!el) return; // La vista actual no tiene footer renderizado todavía
+    el.innerHTML = this._renderSyncIndicatorInner();
+  },
 };
+
+// Event listener global: cuando cambia el estado de sync en DB,
+// refrescamos el indicador del footer sin tocar el resto de la vista.
+window.addEventListener('db:sync-state-changed', () => {
+  if (typeof App !== 'undefined' && App._updateSyncIndicator) {
+    App._updateSyncIndicator();
+  }
+});
 
 // Initialize when DOM ready
 document.addEventListener('DOMContentLoaded', () => App.init());

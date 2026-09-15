@@ -99,6 +99,27 @@ MÓDULO CLÍNICO (si el menú es para alguien en tratamiento activo de quimioter
 - Proteínas magras bien cocinadas (pollo/pavo/pescado al horno, huevo duro, legumbres cocidas, tofu).
 - Frutas y verduras bien lavadas, peladas o cocinadas.
 
+=== MÓDULO ANTIINFLAMATORIO (Dr. Sebastián La Rosa) ===
+Criterios adicionales basados en la experiencia clínica del Dr. Sebastián La Rosa, enfocados en reducir la inflamación sistémica, reparar células y mejorar la salud integral. Aplicá estas reglas SIEMPRE que el menú lo permita; son complementarios (no contradictorios) con las reglas OMS/WCRF/AICR de arriba. Son las "tres bases estructurales": alimentación, movimiento y descanso. Este módulo cubre la base de ALIMENTACIÓN.
+
+A PROMOVER (puntuación +):
+- ORDEN DE LOS ALIMENTOS (aplanar la curva de glucosa): consumir primero la fibra (ensaladas/verduras) y la proteína, esperar 20–30 minutos, y consumir los carbohidratos al final. Esto evita los picos de azúcar en sangre que disparan la inflamación. Valorá positivamente los platos que respeten esta secuencia (ej: "primer plato verdura + proteína, segundo plato HC") y negativamente los que mezclan fibra + HC + proteína desde el primer bocado sin separación temporal (ej: pasta con verduras salteadas y atún todo junto desde el minuto 0).
+- MICROBIOTA INTESTINAL: presencia de alimentos ricos en fibra soluble, especialmente legumbres y hongos (champiñones, setas, shiitake, portobello), que nutren las bacterias beneficiosas del intestino. Refuerza la meta de legumbres 2-3×/sem.
+- OMEGA-3 (EPA y DHA): consumo de pescados grasos (salmón, sardinas, caballa, anchoas, chicharro, atún), mariscos o algas para asegurar suficiente Omega-3 con sus potentes efectos antiinflamatorios. Refuerza la meta de "pescado azul 2-3×/sem" y es especialmente valioso si el plato se cocina al horno/plancha suave/vapor (no fritura, que degrada los EPA/DHA).
+- SULFORAFANO: presencia de crucíferas (brócoli, coliflor, kale, rúcula, coles de Bruselas, repollo, nabos) al menos 1–2×/sem por su contenido en sulforafano, un compuesto protector contra la oxidación y el envejecimiento celular. Importante: el sulforafano se preserva mejor con cocción suave (al vapor o salteado rápido); penalizar brócoli muy hervido o frito.
+- ESTRUCTURA DEL DÍA: almuerzo como comida más completa (más kcal, más HC complejos, mayor ración) y cenas ligeras + tempranas, alineado con la cronobiología y la capacidad digestiva/enzimática que es mayor hacia el mediodía.
+
+A PENALIZAR (puntuación −):
+- LÁCTEOS CONVENCIONALES en exceso: reducir el consumo excesivo de lácteos convencionales (leche entera, quesos frescos industriales, yogur azucarado, nata, mantequilla) por su potencial inflamatorio en personas con sensibilidad. Pequeñas cantidades en receta (ej: un poco de queso rallado en una pasta, una salsa ligera) NO se penalizan; sí se penaliza el consumo abundante o diario (desayuno lácteo pesado, postre lácteo diario, queso como ingrediente principal). Preferí yogur natural sin azúcar, kéfir o quesos fermentados maduros con moderación.
+- CENAS DE ESTRUCTURA INVERSA: cenas que estructuralmente deberían ser almuerzos (pasta grande con carne, lasaña, fabada como plato único nocturno, guisos densos, arroces pesados, frituras). La cronobiología penaliza sistemáticamente las cenas pesadas porque deterioran el descanso y la reparación celular.
+- CARBOHIDRATOS REFINADOS EN CENA: cena con pan blanco, pasta blanca, arroz blanco o patatas como plato principal (HC > 25 g/ración en cena) penaliza doble: por refinado y por cronobiología. Es preferible verdura + proteína magra con HC mínimos.
+- COCCIONES DESTRUCTIVAS DE OMEGA-3: si el plato aporta pescado azul pero se fríe o se cocina a muy alta temperatura, se anula parte del beneficio antiinflamatorio (degradación de EPA/DHA y formación de compuestos pro-inflamatorios). Penalizar y sugerir horno, vapor, plancha suave o papillote.
+- CRUCÍFERAS MAL COCINADAS: brócoli/coliflor muy hervidos (más de 10-15 min en agua) pierden hasta el 80% del sulforafano. Valorá positivamente el brócoli al dente, al vapor 5-7 min, salteado rápido o crudo rallado (en salad).
+
+INTERACCIÓN CON OTROS MÓDULOS:
+- Este módulo se evalúa JUNTO con MÓDULO CLÍNICO. Si hay conflicto (ej: brócoli crudo para paciente en tratamiento activo), prevalece MÓDULO CLÍNICO (siempre bien lavado/pelado/cocinado). Para usuarios sin tratamiento activo, aplicá este módulo con normalidad.
+- Refuerza y nunca contradice las METAS SEMANALES CUANTITATIVAS; si un plato cumple una meta cuantitativa Y además respeta un criterio de La Rosa (ej: salmón al horno = pescado azul 2-3×/sem + Omega-3 + cocción suave), bonificá doble.
+
 === METAS SEMANALES CUANTITATIVAS (targets David & María) ===
 
 Al evaluar, contá cuántas veces aparece cada categoría en las 14 comidas de la semana y compará con estas metas. Usá el NOMBRE de la receta + el campo 'tipo' + los 'tags' para clasificar.

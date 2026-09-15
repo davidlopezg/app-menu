@@ -1310,6 +1310,17 @@ select.form-input {
   font-weight: 600;
 }
 
+.app-footer__sync--error {
+  color: var(--color-warning, #f59e0b);
+  font-weight: 700;
+  animation: pulse-warning 2s ease-in-out infinite;
+}
+
+@keyframes pulse-warning {
+  0%, 100% { opacity: 0.65; }
+  50% { opacity: 1; }
+}
+
 /* === Template actions row (debajo del grid de la semana) === */
 .template-actions {
   display: flex;

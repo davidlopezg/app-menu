@@ -20,6 +20,16 @@ const DB = {
   _channel: null,
   _pulling: false,   // evita loops cuando pullAll dispara Store.set
 
+  // Estado de sincronización (para Fix B/E):
+  // Contador de errores pendientes de push. Se incrementa en cada push que
+  // falla y se resetea a 0 cuando un push tiene éxito. Lo usa el footer
+  // para mostrar "⚠️ N sin sincronizar" en vez de "✓ sincronizado".
+  _pendingSyncErrors: 0,
+  // Throttle del toast: máximo 1 cada 60s. Si hay ráfagas de errores
+  // (ej: edita 5 recetas seguidas), no se muestran 5 toasts sino 1 + contador.
+  _lastSyncErrorToast: 0,
+  SYNC_ERROR_TOAST_THROTTLE: 60000,
+
   USER_KEY: 'menuapp_user',   // localStorage key de la "sesión" (email del usuario)
 
   // ============================================
@@ -213,6 +223,48 @@ const DB = {
   // ============================================
   // Push (local → Supabase). Se llama automático desde Store hook.
   // ============================================
+
+  // Helper unificado para reportar fallos de sync (Fix B+C+D):
+  // - Throttle: máx 1 toast cada 60s para no inundar al usuario.
+  // - Mensaje: incluye el error real de Supabase (truncado) en vez de genérico.
+  // - Contador: incrementa _pendingSyncErrors para que el footer lo muestre.
+  // - Evento: emite "db:sync-state-changed" para que el footer se actualice.
+  _reportSyncError(scope, error) {
+    this._pendingSyncErrors++;
+    console.error(`[DB] ${scope} sync error:`, error);
+
+    const now = Date.now();
+    const isThrottled = (now - this._lastSyncErrorToast) < this.SYNC_ERROR_TOAST_THROTTLE;
+
+    if (typeof Components !== 'undefined' && Components.toast) {
+      if (!isThrottled) {
+        // Primer error del período → toast completo con mensaje real
+        const msg = error?.message
+          ? `⚠️ Guardé localmente pero no se sincronizó (${String(error.message).slice(0, 100)})`
+          : '⚠️ Guardé localmente pero no se sincronizó a la nube';
+        Components.toast.show(msg);
+        this._lastSyncErrorToast = now;
+      }
+      // Si está throttled, NO mostramos otro toast (ya hay uno visible).
+      // El footer se encarga de mantener el contador actualizado.
+    }
+
+    // Avisar al footer para que actualice el indicador
+    window.dispatchEvent(new CustomEvent('db:sync-state-changed', {
+      detail: { pendingErrors: this._pendingSyncErrors, lastError: error }
+    }));
+  },
+
+  // Llamado cuando un push tiene éxito → resetea el contador de errores pendientes.
+  _reportSyncSuccess() {
+    if (this._pendingSyncErrors > 0) {
+      this._pendingSyncErrors = 0;
+      window.dispatchEvent(new CustomEvent('db:sync-state-changed', {
+        detail: { pendingErrors: 0, lastError: null }
+      }));
+    }
+  },
+
   async pushRecipes(recipes) {
     if (!this.client || this._pulling) return;
     if (!this.isAuth()) return;
@@ -232,12 +284,9 @@ const DB = {
     }));
     const { error } = await this.client.from('recipes').upsert(rows);
     if (error) {
-      console.error('pushRecipes:', error);
-      // Surface error so the user knows the cloud sync failed
-      // (localStorage save ya pasó, esto solo es aviso)
-      if (typeof Components !== 'undefined' && Components.toast) {
-        Components.toast.show('⚠️ Guardé localmente pero no se sincronizó a la nube');
-      }
+      this._reportSyncError('pushRecipes', error);
+    } else {
+      this._reportSyncSuccess();
     }
   },
 
@@ -251,7 +300,11 @@ const DB = {
     }));
     if (rows.length === 0) return;
     const { error } = await this.client.from('menu_weeks').upsert(rows);
-    if (error) console.error('pushMenu:', error);
+    if (error) {
+      this._reportSyncError('pushMenu', error);
+    } else {
+      this._reportSyncSuccess();
+    }
   },
 
   async pushTemplates(templates) {
@@ -266,7 +319,11 @@ const DB = {
       updated_at: t.updatedAt || new Date().toISOString(),
     }));
     const { error } = await this.client.from('menu_templates').upsert(rows);
-    if (error) console.error('pushTemplates:', error);
+    if (error) {
+      this._reportSyncError('pushTemplates', error);
+    } else {
+      this._reportSyncSuccess();
+    }
   },
 
   // ============================================
