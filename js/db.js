@@ -322,6 +322,26 @@ const DB = {
     }
   },
 
+  // FIX: borrar receta en Supabase. Antes solo se borraba local y
+  // pushRecipes upsertaba el resto, así que la fila quedaba en la nube
+  // y el siguiente pullAll la traía de vuelta (la receta "no se borraba").
+  // Borra local primero (UX inmediata) y después intenta en Supabase.
+  // Si Supabase falla, muestra toast pero NO rollback — el estado local
+  // ya está limpio para el usuario.
+  async deleteRecipe(id) {
+    if (!id) return;
+    if (!this.client) return;
+    if (!this.isAuth()) return;
+    const { error } = await this.client.from('recipes').delete().eq('id', id);
+    if (error) {
+      // Reportar igual: si la fila sigue en la nube, el próximo pull
+      // puede revivirla localmente. El footer le avisa al usuario.
+      this._reportSyncError('pushRecipes', error);
+    } else {
+      this._reportSyncSuccess('pushRecipes');
+    }
+  },
+
   async pushMenu(menu) {
     if (!this.client || this._pulling) return;
     if (!this.isAuth()) return;

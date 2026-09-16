@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v31 (2025-09-16)',
+  VERSION: 'v32 (2025-09-16)',
 
   // ============================================
   // Initialize
@@ -1450,6 +1450,8 @@ const App = {
   deleteRecipe(id) {
     if (confirm('¿Eliminar esta receta?')) {
       Recipes.delete(id);
+      // También borrar en Supabase (pushRecipes no borra, solo upserta).
+      DB.deleteRecipe(id);
       Components.toast.show(T.toast.recipeDeleted);
       this.navigate('recipes');
     }
