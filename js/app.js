@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v29 (2025-09-15)',
+  VERSION: 'v30 (2025-09-16)',
 
   // ============================================
   // Initialize
@@ -432,7 +432,10 @@ const App = {
     }
     Components.modal.close();
     Components.toast.show('✅ Plantilla guardada');
-    this.renderMenuView();
+    // FIX #5: si veníamos de la vista plantilla, quedarse ahí en vez de
+    // saltar al menú (antes hacía renderMenuView() siempre).
+    if (this.currentView === 'template') this.renderTemplateView();
+    else this.renderMenuView();
   },
 
   // Aplica la plantilla a la semana actual
@@ -762,6 +765,7 @@ const App = {
               ← Volver al menú
             </button>
           </div>
+          ${this._renderFooter()}
         </div>
       `;
       return;
@@ -819,6 +823,8 @@ const App = {
         </button>
       </div>
     `;
+
+    html += this._renderFooter();
 
     main.innerHTML = html;
     this._attachTemplateCellListeners();
@@ -1041,7 +1047,7 @@ const App = {
     this._updateHeaderTitle(isEdit ? T.recipe.editRecipe : T.recipe.newRecipe);
 
     const main = document.getElementById('main-content');
-    main.innerHTML = Components.recipeForm(recipe, isEdit);
+    main.innerHTML = Components.recipeForm(recipe, isEdit) + this._renderFooter();
     // El submit se maneja inline con onsubmit en el form (más confiable)
   },
 
@@ -1528,7 +1534,7 @@ const App = {
   // Se llama tanto al pintar el footer como al actualizarlo por evento.
   _renderSyncIndicatorInner() {
     if (!DB.isAuth()) return '';
-    const pending = DB._pendingSyncErrors || 0;
+    const pending = DB.getTotalPendingErrors ? DB.getTotalPendingErrors() : 0;
     if (pending > 0) {
       return `<span class="app-footer__sync app-footer__sync--error" title="${pending} cambio(s) sin sincronizar a la nube">⚠️ ${pending} sin sincronizar</span>`;
     }

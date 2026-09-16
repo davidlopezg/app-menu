@@ -20,15 +20,24 @@ const DB = {
   _channel: null,
   _pulling: false,   // evita loops cuando pullAll dispara Store.set
 
-  // Estado de sincronización (para Fix B/E):
-  // Contador de errores pendientes de push. Se incrementa en cada push que
-  // falla y se resetea a 0 cuando un push tiene éxito. Lo usa el footer
-  // para mostrar "⚠️ N sin sincronizar" en vez de "✓ sincronizado".
-  _pendingSyncErrors: 0,
+  // Estado de sincronización (Fix B/E/#3):
+  // Contador de errores pendientes POR SCOPE. Antes era un solo número
+  // global que se reseteaba a 0 con cualquier push exitoso — mentía: si
+  // pushRecipes fallaba 3 veces y pushMenu tenía éxito, el contador iba
+  // a 0 en vez de mantener las 3 fallas reales. Ahora cada scope tiene el
+  // suyo y el footer muestra la suma.
+  _pendingSyncErrors: { recipes: 0, menu: 0, templates: 0 },
   // Throttle del toast: máximo 1 cada 60s. Si hay ráfagas de errores
   // (ej: edita 5 recetas seguidas), no se muestran 5 toasts sino 1 + contador.
   _lastSyncErrorToast: 0,
   SYNC_ERROR_TOAST_THROTTLE: 60000,
+
+  // Suma total de errores pendientes (para el footer).
+  // Si alguna vez cambia la forma del objeto, solo se toca acá.
+  getTotalPendingErrors() {
+    const e = this._pendingSyncErrors || {};
+    return (e.recipes || 0) + (e.menu || 0) + (e.templates || 0);
+  },
 
   USER_KEY: 'menuapp_user',   // localStorage key de la "sesión" (email del usuario)
 
@@ -174,7 +183,11 @@ const DB = {
       if (e2) console.error('pull weeks:', e2);
       if (e3) console.error('pull templates:', e3);
 
-      if (recipes) {
+      // FIX #2: solo pisar localStorage si Supabase trae filas.
+      // Antes, si el usuario era nuevo y Supabase devolvía [] (caso normal
+      // en el primer login), pisábamos el seed local con un array vacío
+      // y la app quedaba vacía hasta que volvieran a crear recetas.
+      if (recipes && recipes.length > 0) {
         const mapped = recipes.map(r => ({
           id: r.id,
           nombre: r.nombre,
@@ -191,7 +204,7 @@ const DB = {
         if (typeof Recipes !== 'undefined') Recipes._recipes = mapped;
       }
 
-      if (weeks) {
+      if (weeks && weeks.length > 0) {
         const menu = {};
         weeks.forEach(w => { menu[w.week_key] = w.data; });
         Store.set(Store.KEYS.MENU, menu);
@@ -201,7 +214,7 @@ const DB = {
         }
       }
 
-      if (templates) {
+      if (templates && templates.length > 0) {
         const mapped = templates.map(t => ({
           id: t.id,
           nombre: t.nombre,
@@ -230,7 +243,14 @@ const DB = {
   // - Contador: incrementa _pendingSyncErrors para que el footer lo muestre.
   // - Evento: emite "db:sync-state-changed" para que el footer se actualice.
   _reportSyncError(scope, error) {
-    this._pendingSyncErrors++;
+    // scope viene como 'pushRecipes' | 'pushMenu' | 'pushTemplates'.
+    // Mapeamos al bucket del contador.
+    const bucket = scope === 'pushRecipes' ? 'recipes'
+                 : scope === 'pushMenu'    ? 'menu'
+                 : scope === 'pushTemplates' ? 'templates'
+                 : null;
+    if (bucket) this._pendingSyncErrors[bucket] = (this._pendingSyncErrors[bucket] || 0) + 1;
+
     console.error(`[DB] ${scope} sync error:`, error);
 
     const now = Date.now();
@@ -251,16 +271,22 @@ const DB = {
 
     // Avisar al footer para que actualice el indicador
     window.dispatchEvent(new CustomEvent('db:sync-state-changed', {
-      detail: { pendingErrors: this._pendingSyncErrors, lastError: error }
+      detail: { pendingErrors: this.getTotalPendingErrors(), lastError: error }
     }));
   },
 
-  // Llamado cuando un push tiene éxito → resetea el contador de errores pendientes.
-  _reportSyncSuccess() {
-    if (this._pendingSyncErrors > 0) {
-      this._pendingSyncErrors = 0;
+  // Llamado cuando un push tiene éxito → resetea SOLO el contador de ese scope.
+  // Los otros scopes que hayan fallado antes mantienen su conteo.
+  _reportSyncSuccess(scope) {
+    const bucket = scope === 'pushRecipes' ? 'recipes'
+                 : scope === 'pushMenu'    ? 'menu'
+                 : scope === 'pushTemplates' ? 'templates'
+                 : null;
+    if (!bucket) return;
+    if ((this._pendingSyncErrors[bucket] || 0) > 0) {
+      this._pendingSyncErrors[bucket] = 0;
       window.dispatchEvent(new CustomEvent('db:sync-state-changed', {
-        detail: { pendingErrors: 0, lastError: null }
+        detail: { pendingErrors: this.getTotalPendingErrors(), lastError: null }
       }));
     }
   },
@@ -286,7 +312,7 @@ const DB = {
     if (error) {
       this._reportSyncError('pushRecipes', error);
     } else {
-      this._reportSyncSuccess();
+      this._reportSyncSuccess('pushRecipes');
     }
   },
 
@@ -303,7 +329,7 @@ const DB = {
     if (error) {
       this._reportSyncError('pushMenu', error);
     } else {
-      this._reportSyncSuccess();
+      this._reportSyncSuccess('pushMenu');
     }
   },
 
@@ -322,7 +348,7 @@ const DB = {
     if (error) {
       this._reportSyncError('pushTemplates', error);
     } else {
-      this._reportSyncSuccess();
+      this._reportSyncSuccess('pushTemplates');
     }
   },
 
