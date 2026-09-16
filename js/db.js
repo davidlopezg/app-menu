@@ -168,6 +168,12 @@ const DB = {
   // ============================================
   async pullAll() {
     if (!this.client) return;
+    // FIX: guard de re-entrada. Si ya hay un pull en vuelo, no iniciar
+    // otro — el que está corriendo va a traer los datos que necesitamos.
+    // Antes faltaba esto y 3 eventos realtime seguidos disparaban 3
+    // pullAll paralelos → 3 re-renders encimados → el DOM se reemplazaba
+    // justo cuando el usuario iba a tocar una receta.
+    if (this._pulling) return;
     this._pulling = true;
     try {
       const [
@@ -376,7 +382,24 @@ const DB = {
     }
   },
 
+  // Coalesce de eventos realtime. Supabase ecoa los eventos al cliente
+  // que los generó, así que cada push dispara un evento → re-render.
+  // Si entran varios en quick succession (ej: eco de 3 tablas a la vez)
+  // los agrupamos en un solo re-render con un microtask + 50ms de debounce.
+  _renderScheduled: false,
   async _onRemoteChange() {
+    if (this._renderScheduled) return;
+    this._renderScheduled = true;
+    // Un microtask deja respirar al event loop para agrupar eventos
+    // que llegaron en el mismo tick, pero no espera de más.
+    await Promise.resolve();
+    setTimeout(() => {
+      this._renderScheduled = false;
+      this._renderAfterRemoteChange();
+    }, 50);
+  },
+
+  async _renderAfterRemoteChange() {
     await this.pullAll();
     if (typeof App !== 'undefined') {
       if (App.currentView === 'menu')    App.renderMenuView();
