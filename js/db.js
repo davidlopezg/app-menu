@@ -337,9 +337,16 @@ const DB = {
       // Reportar igual: si la fila sigue en la nube, el próximo pull
       // puede revivirla localmente. El footer le avisa al usuario.
       this._reportSyncError('pushRecipes', error);
-    } else {
-      this._reportSyncSuccess('pushRecipes');
+      return;
     }
+    this._reportSyncSuccess('pushRecipes');
+    // FIX: race entre pushRecipes (upsert) y deleteRecipe (delete).
+    // Supabase procesa ambos async, y el realtime eco de cada uno puede
+    // disparar pullAll en momentos distintos. Si pullAll lee entre el
+    // upsert (que NO toca la fila borrada) y el delete, trae la receta
+    // de vuelta. Forzamos un pullAll final para que el estado local
+    // refleje el estado real de la nube.
+    await this.pullAll();
   },
 
   async pushMenu(menu) {
