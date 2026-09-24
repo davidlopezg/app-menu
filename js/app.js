@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v35 (2025-09-24)',
+  VERSION: 'v36 (2025-09-24)',
 
   // ============================================
   // Initialize
@@ -475,17 +475,19 @@ const App = {
       ['lunes', 'Lun'], ['martes', 'Mar'], ['miercoles', 'Mié'],
       ['jueves', 'Jue'], ['viernes', 'Vie'], ['sabado', 'Sáb'], ['domingo', 'Dom'],
     ];
+    const dayKeyEsToEn = { lunes:'monday', martes:'tuesday', miercoles:'wednesday',
+                           jueves:'thursday', viernes:'friday', sabado:'saturday', domingo:'sunday' };
 
     // Detectar recetas que la IA devolvió pero no existen en el catálogo
-    const available = new Set(recipes.map(r => r.nombre.toLowerCase()));
+    const byName = new Map(recipes.map(r => [r.nombre.toLowerCase(), r]));
     const missingByDay = {};
     let totalMissing = 0;
     days.forEach(([key]) => {
       const d = mp[key];
       if (!d) return;
       const missing = [];
-      if (d.comida && !available.has(d.comida.toLowerCase())) missing.push(d.comida);
-      if (d.cena && !available.has(d.cena.toLowerCase())) missing.push(d.cena);
+      if (d.comida && !byName.has(d.comida.toLowerCase())) missing.push(d.comida);
+      if (d.cena && !byName.has(d.cena.toLowerCase())) missing.push(d.cena);
       if (missing.length) {
         missingByDay[key] = missing;
         totalMissing += missing.length;
@@ -512,22 +514,42 @@ const App = {
         </div>`;
     }).join('');
 
-    // Cumplimiento de metas (mini-grid de pills)
-    const cm = result.cumple_metas || {};
-    const metasHtml = Object.keys(cm).length
-      ? `<div class="prop-menu__metas">
-          ${Object.entries(cm).map(([k, v]) =>
-            `<span class="prop-menu__meta"><strong>${Components.escapeHtml(k.replace(/_/g, ' '))}:</strong> ${Components.escapeHtml(String(v))}</span>`
-          ).join('')}
-        </div>`
-      : '';
-
-    const warningsHtml = (result.advertencias && result.advertencias.length)
-      ? `<div class="prop-menu__warnings">
-          <strong>⚠️ Notas:</strong>
-          <ul>${result.advertencias.map(a => `<li>${Components.escapeHtml(a)}</li>`).join('')}</ul>
-        </div>`
-      : '';
+    // Calcular cumplimiento de metas EN EL CLIENTE con NutritionPanel.
+    // Esto evita que la IA tenga que generar esos datos (más rápido y más fiable).
+    const proposedWeek = { monday:{lunch:null,dinner:null}, tuesday:{lunch:null,dinner:null},
+                           wednesday:{lunch:null,dinner:null}, thursday:{lunch:null,dinner:null},
+                           friday:{lunch:null,dinner:null}, saturday:{lunch:null,dinner:null},
+                           sunday:{lunch:null,dinner:null} };
+    days.forEach(([esKey]) => {
+      const enKey = dayKeyEsToEn[esKey];
+      const d = mp[esKey];
+      if (!d) return;
+      if (d.comida) {
+        const r = byName.get(d.comida.toLowerCase());
+        if (r) proposedWeek[enKey].lunch = r.id;
+      }
+      if (d.cena) {
+        const r = byName.get(d.cena.toLowerCase());
+        if (r) proposedWeek[enKey].dinner = r.id;
+      }
+    });
+    let metasHtml = '';
+    try {
+      const a = NutritionPanel.analyze(proposedWeek, recipes);
+      const pills = NutritionPanel.CATEGORIES.map(cat => {
+        const count = a.catCounts[cat.key] || 0;
+        const ok = count >= cat.metaMin && count <= cat.metaMax;
+        const cls = ok ? 'prop-menu__meta--ok' : 'prop-menu__meta--warn';
+        const icon = ok ? '✅' : count < cat.metaMin ? '⚠️' : '🚨';
+        return `<span class="prop-menu__meta ${cls}">${icon} ${Components.escapeHtml(cat.label)}: ${count} / ${cat.metaMin}${cat.metaMax !== cat.metaMin ? '–' + cat.metaMax : '+'}</span>`;
+      });
+      const verdStatus = a.diasVerduraCompleta === 7 ? 'ok' : 'warn';
+      pills.push(`<span class="prop-menu__meta prop-menu__meta--${verdStatus}">${verdStatus === 'ok' ? '✅' : '⚠️'} Verdura diaria: ${a.diasVerduraCompleta}/7 días</span>`);
+      pills.push(`<span class="prop-menu__meta prop-menu__meta--${a.friturasCount <= 2 ? 'ok' : 'warn'}">${a.friturasCount <= 2 ? '✅' : '⚠️'} Frituras: ${a.friturasCount}</span>`);
+      metasHtml = `<div class="prop-menu__metas">${pills.join('')}</div>`;
+    } catch (e) {
+      console.warn('[proposeWeekMenu] No pude calcular metas:', e);
+    }
 
     const missingBanner = totalMissing > 0
       ? `<div class="prop-menu__missing-banner">
@@ -547,7 +569,6 @@ const App = {
         ${missingBanner}
         ${metasHtml}
         <div class="prop-menu__grid">${rowsHtml}</div>
-        ${warningsHtml}
         <div style="display: flex; gap: 8px; margin-top: 16px;">
           <button class="btn btn--outline" onclick="Components.modal.close()">Cancelar</button>
           <button class="btn btn--primary" style="flex: 1;" id="btn-apply-prop-menu">💾 Aplicar a esta semana</button>

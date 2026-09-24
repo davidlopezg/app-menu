@@ -501,23 +501,14 @@ Devolvé SOLO este objeto (sin texto antes ni después):
     "sabado":   {"comida": "<nombre exacto>", "cena": "<nombre exacto>"},
     "domingo":  {"comida": "<nombre exacto>", "cena": "<nombre exacto>"}
   },
-  "resumen": "2-3 frases amigables: qué se priorizó, qué metas se cumplen, puntos fuertes del menú.",
-  "cumple_metas": {
-    "pescado_azul": "X/2-3",
-    "legumbres": "X/2-3",
-    "pollo_pavo": "X/2-3",
-    "huevos": "X/2-3",
-    "carne_roja": "X (≤1)",
-    "verdura_diaria": "X/7 días",
-    "frituras": "X (≤1-2)"
-  },
-  "advertencias": ["..."]
+  "resumen": "2 frases amigables con lo que se priorizó."
 }
 
 Notas:
-- "advertencias": array vacío si todo encaja. Si hay huecos, explicar brevemente qué falta (ej: "No hay receta de legumbres en el catálogo, considerá añadir alguna").
-- Si el catálogo tiene <14 recetas distintas, podés repetir recetas en días diferentes (es OK, siempre que respeten variedad de proteína).
-- Respondé SIEMPRE en español, tuteando.`,
+- NO incluyas campos extra (cumple_metas, advertencias, etc.). Solo esos 2 campos.
+- Si una celda no tiene buena opción, igual pon la mejor disponible usando el catálogo.
+- Si el catálogo tiene <14 recetas distintas, podés repetir recetas en días diferentes.
+- Respondé SIEMPRE en español, tuteando. Output lo más corto posible.`,
 
   // ============================================
   // Propone un menú semanal completo respetando las metas nutricionales.
@@ -573,7 +564,7 @@ Notas:
     const text = await this.call([
       { role: 'system', content: this.systemPromptProposeMenu },
       { role: 'user', content: userPrompt },
-    ], { json: true, temperature: 0.7 });
+    ], { json: true, temperature: 0.7, timeout: 90000 });
     return this.extractJson(text);
   },
 
