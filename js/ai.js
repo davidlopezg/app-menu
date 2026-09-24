@@ -463,30 +463,39 @@ Otras reglas:
 
   systemPromptProposeMenu: `Eres un asistente que planifica el menú semanal de David y María con un objetivo nutricional concreto. Recibís DOS cosas:
 
-1. **CATÁLOGO**: lista de TODAS las recetas disponibles con su nombre, tipo de comida (almuerzo/cena/ambos), tags (incluyendo categorías nutricionales) y datos nutricionales por ración (calorías, carbohidratos, proteínas, grasas).
+1. **CATÁLOGO**: lista de TODAS las recetas disponibles (solo los nombres).
 2. **MENÚ ACTUAL**: lo que ya hay asignado en esta semana (puede estar vacío, completo o parcial).
 
 Tu trabajo: proponer el MEJOR menú semanal posible usando SOLO recetas del catálogo, respetando metas nutricionales estrictas.
 
+=== INFERIR CATEGORÍAS POR EL NOMBRE ===
+Como solo recibís los nombres de las recetas, tenés que deducir las categorías por el nombre:
+- Pescado azul: salmón, sardinas, caballa, atún, anchoas, chicharro, melva, boquerón, arenque, jurel.
+- Legumbres: lentejas, garbanzos, judías, habichuelas, soja, edamame, frijoles, porotos, alubias.
+- Pollo o pavo: cualquier receta con "pollo" o "pavo" en el nombre.
+- Huevos: tortilla, revuelto, frittata, huevos (duro, pochado, etc.).
+- Carne roja: ternera, cordero, cerdo, vacuno, res, buey, chuletón, solomillo, lomo, entrecot.
+- Verdura: ensalada, verdura, brócoli, espinaca, acelga, calabacín, zanahoria, tomate, pimiento, lechuga, rúcula, col, coliflor, apio, puerro, etc.
+- Fritura: cualquier receta con "frito", "empanizado", "rebozado", "croqueta", "tempura".
+
 === METAS SEMANALES OBLIGATORIAS (14 comidas) ===
-- Pescado azul 2-3×/sem (salmón, sardinas, caballa, atún, anchoas, chicharro).
-- Legumbres 2-3×/sem (lentejas, garbanzos, judías, habichuelas, soja, edamame).
-- Pollo o pavo 2-3×/sem (carnes blancas magras).
-- Huevos 2-3×/sem (tortilla, revuelto, duro, pochado).
-- Carne roja ≤1×/sem (ternera, cordero, cerdo magro).
+- Pescado azul 2-3×/sem.
+- Legumbres 2-3×/sem.
+- Pollo o pavo 2-3×/sem.
+- Huevos 2-3×/sem.
+- Carne roja ≤1×/sem.
 - Verdura presente todos los días (comida Y cena). Cero días sin verdura en alguna comida.
 - Frituras ≤1-2×/sem. Priorizar horno, vapor, salteado, hervido, plancha suave.
-- Cenas ligeras: bajo HC (≤25 g/ración idealmente), sin frituras, verduras + proteína magra.
-- Almuerzo es la comida más completa (más kcal, más HC complejos); cenas más livianas.
+- Cenas ligeras (bajo HC, sin frituras, verduras + proteína magra).
+- Almuerzo es la comida más completa; cenas más livianas.
 - Variedad: no repetir la misma proteína 2 días seguidos.
-- Aceite de oliva como grasa principal; evitar mantequcilla, nata, fritos.
+- Aceite de oliva como grasa principal.
 
 === REGLAS DE USO DEL CATÁLOGO ===
 - Usá SOLO recetas del catálogo. El nombre tiene que COINCIDIR EXACTAMENTE con uno de la lista.
-- Si una receta es claramente de cena (tipoComida=cena), priorizala para ese slot; si es almuerzo, para almuerzo. Si es "ambos", usala donde mejor encaje.
-- Si una receta tiene muy pocos datos nutricionales (cal=0 y hc=0 y proteinas=0), no la penalices por eso pero tratala como neutra.
+- Si una receta suena a cena ligera (cremas, tortillas, ensaladas, plancha), priorizala para ese slot. Si suena a plato fuerte (guisos, pasta, arroces, legumbres, carnes), priorizala para almuerzo.
 - Si no hay suficientes recetas para cumplir TODAS las metas simultáneamente, priorizá las más importantes (pescado azul 2×, legumbres 2×, verdura diaria, frituras ≤1×) y relajá las demás.
-- Si no podés cubrir algún día con verdura, mencionalo en "advertencias".
+- Si el catálogo tiene <14 recetas distintas, podés repetir recetas en días diferentes (es OK, siempre que respeten variedad de proteína).
 
 === ESTRUCTURA DE SALIDA (JSON estricto, sin markdown) ===
 Devolvé SOLO este objeto (sin texto antes ni después):
@@ -507,7 +516,6 @@ Devolvé SOLO este objeto (sin texto antes ni después):
 Notas:
 - NO incluyas campos extra (cumple_metas, advertencias, etc.). Solo esos 2 campos.
 - Si una celda no tiene buena opción, igual pon la mejor disponible usando el catálogo.
-- Si el catálogo tiene <14 recetas distintas, podés repetir recetas en días diferentes.
 - Respondé SIEMPRE en español, tuteando. Output lo más corto posible.`,
 
   // ============================================
@@ -516,17 +524,13 @@ Notas:
   // Devuelve {menu_propuesto, resumen, cumple_metas, advertencias}.
   // ============================================
   async proposeWeekMenu(recipes, currentWeek) {
-    // Construir el catálogo con la info que la IA necesita para clasificar.
-    // Solo mandamos nombre + tipo + tags (sin kcal exactos por receta) para
-    // mantener el body chico: para proponer menú la IA no necesita los
-    // macronutrientes exactos de cada receta — solo necesita categorizar
-    // (pescado azul / legumbres / pollo / huevos / verdura / fritura) y eso
-    // ya está en los tags. Las kcal las calcula el panel local en el cliente.
-    const catalog = recipes.map(r => {
-      const tags = (r.tags || []).join(', ');
-      const tipo = r.tipoComida || 'ambos';
-      return `- "${r.nombre}" | tipo:${tipo} | tags:${tags || '-'}`;
-    }).join('\n');
+    // v37: solo mandamos los NOMBRES de las recetas (sin tipo, sin tags, sin
+    // macros). La IA tiene que inferir las categorías nutricionales por el
+    // nombre (salmón = pescado azul, lentejas = legumbres, etc.). Esto reduce
+    // drásticamente el body y deja al endpoint MiniMax generar más rápido.
+    // Las kcal/macros y la verificación fina de cumplimiento de metas las
+    // calcula NutritionPanel en el cliente sobre la propuesta recibida.
+    const catalog = recipes.map(r => `- "${r.nombre}"`).join('\n');
 
     // Menú actual (para que la IA vea qué hay y proponga cambios coherentes)
     const dayNames = { monday: 'lunes', tuesday: 'martes', wednesday: 'miercoles',
