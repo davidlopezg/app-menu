@@ -240,6 +240,10 @@ Otras reglas:
     }
 
     let res;
+    // Timeout configurable (algunos prompts grandes tardan más de 30s)
+    const timeoutMs = opts.timeout ?? 45000;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       // Log útil para debug en DevTools (consola del navegador)
       console.log('[AI] request →', {
@@ -248,6 +252,8 @@ Otras reglas:
         model: this.model,
         keyLen: this.key?.length || 0,
         keyPrefix: this.key ? this.key.slice(0, 7) + '…' : '(empty)',
+        timeoutMs,
+        bodyKB: Math.round(JSON.stringify(body).length / 1024),
       });
 
       res = await fetch(this.endpoint, {
@@ -257,9 +263,19 @@ Otras reglas:
           'Authorization': `Bearer ${this.key}`,
         },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
+      clearTimeout(timer);
     } catch (e) {
-      throw new Error('Error de red: ' + (e.message || e) + '. ¿Endpoint correcto?');
+      clearTimeout(timer);
+      const isAbort = e.name === 'AbortError' || /aborted/i.test(e.message || '');
+      const ctx = `[provider=${this.provider}, endpoint=${this.endpoint}]`;
+      if (isAbort) {
+        throw new Error(`Timeout después de ${Math.round(timeoutMs / 1000)}s. ${ctx}. ` +
+          'El prompt puede ser muy grande o el endpoint muy lento. Probá recargar la página.');
+      }
+      throw new Error('Error de red: ' + (e.message || e) + '. ' +
+        '¿Endpoint correcto? ¿HTTPS si la app está en HTTPS? ' + ctx);
     }
 
     if (!res.ok) {
@@ -510,12 +526,15 @@ Notas:
   // ============================================
   async proposeWeekMenu(recipes, currentWeek) {
     // Construir el catálogo con la info que la IA necesita para clasificar.
+    // Solo mandamos nombre + tipo + tags (sin kcal exactos por receta) para
+    // mantener el body chico: para proponer menú la IA no necesita los
+    // macronutrientes exactos de cada receta — solo necesita categorizar
+    // (pescado azul / legumbres / pollo / huevos / verdura / fritura) y eso
+    // ya está en los tags. Las kcal las calcula el panel local en el cliente.
     const catalog = recipes.map(r => {
       const tags = (r.tags || []).join(', ');
       const tipo = r.tipoComida || 'ambos';
-      const n = r.nutricion || {};
-      return `- "${r.nombre}" | tipo:${tipo} | tags:${tags || '-'} ` +
-             `| cal:${n.cal ?? 0} hc:${n.hc ?? 0} prot:${n.proteinas ?? 0} grasas:${n.grasas ?? 0}`;
+      return `- "${r.nombre}" | tipo:${tipo} | tags:${tags || '-'}`;
     }).join('\n');
 
     // Menú actual (para que la IA vea qué hay y proponga cambios coherentes)
