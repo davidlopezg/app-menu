@@ -1345,6 +1345,150 @@ select.form-input {
   margin: var(--space-lg) var(--space-md) var(--space-sm);
 }
 
+/* === CTA de IA para proponer menú semanal === */
+.ai-menu-cta {
+  margin: var(--space-md) var(--space-md) var(--space-sm);
+}
+
+.ai-menu-cta__hint {
+  font-size: var(--font-size-xs, 12px);
+  color: var(--color-text-muted, #666);
+  margin: 6px 0 0 0;
+  text-align: center;
+}
+
+.btn--ai {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  border: none;
+  font-weight: 600;
+}
+
+.btn--ai:hover {
+  filter: brightness(1.05);
+}
+/* === Modal: propuesta de menú semanal con IA === */
+.prop-menu {
+  padding: var(--space-md);
+}
+
+.prop-menu__resumen {
+  background: rgba(102, 126, 234, 0.08);
+  padding: 10px 12px;
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--font-size-sm, 14px);
+  line-height: 1.45;
+  margin: 0 0 12px 0;
+}
+
+.prop-menu__metas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.prop-menu__meta {
+  font-size: 12px;
+  padding: 4px 10px;
+  background: rgba(45, 106, 79, 0.10);
+  border-radius: 999px;
+  color: var(--color-text);
+}
+
+.prop-menu__missing-banner {
+  background: #fff3cd;
+  color: #856404;
+  padding: 10px 12px;
+  border-radius: var(--radius-md, 8px);
+  font-size: 12px;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.prop-menu__missing-banner code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.prop-menu__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.prop-menu__row {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  background: var(--color-bg-alt, rgba(0, 0, 0, 0.02));
+  border-radius: var(--radius-md, 8px);
+}
+
+.prop-menu__day {
+  font-weight: 700;
+  color: var(--color-primary, #2D6A4F);
+  font-size: 13px;
+  text-transform: uppercase;
+}
+
+.prop-menu__meals {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.prop-menu__meal {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.prop-menu__meal-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--color-text-muted, #666);
+}
+
+.prop-menu__cell {
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.prop-menu__cell--empty {
+  color: var(--color-text-muted, #999);
+  font-weight: 400;
+  font-style: italic;
+}
+
+.prop-menu__cell--missing {
+  color: var(--color-error, #dc3545);
+  text-decoration: line-through;
+}
+
+.prop-menu__warnings {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 193, 7, 0.10);
+  border-radius: var(--radius-md, 8px);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.prop-menu__warnings strong { color: var(--color-primary, #2D6A4F); }
+.prop-menu__warnings ul { margin: 4px 0 0 0; padding-left: 18px; }
+.prop-menu__warnings li { margin-bottom: 2px; }
+
 /* === Card de análisis semanal === */
 .week-analysis__age {
   font-size: var(--font-size-xs);

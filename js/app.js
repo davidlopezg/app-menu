@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v33 (2025-09-16)',
+  VERSION: 'v34 (2025-09-24)',
 
   // ============================================
   // Initialize
@@ -224,6 +224,9 @@ const App = {
     // Panel nutricional local (instantáneo, sin IA)
     html += NutritionPanel.render(Menu.getCurrentWeek(), Recipes.getAll());
 
+    // Acciones de IA sobre el menú (proponer / analizar)
+    html += this._renderAiMenuCta();
+
     // Acciones de plantilla (guardar / aplicar / duplicar)
     html += this._renderTemplateActions();
 
@@ -369,6 +372,191 @@ const App = {
     const wk = Menu.getWeekKey();
     localStorage.removeItem(`menuapp_week_analysis_${wk}`);
     await this.analyzeCurrentWeek();
+  },
+
+  // Acciones de IA sobre el menú: proponer uno nuevo o analizar el actual
+  _renderAiMenuCta() {
+    const hasKey = (typeof AI !== 'undefined' && AI.hasKey && AI.hasKey());
+    const hint = hasKey
+      ? ''
+      : '<p class="ai-menu-cta__hint">Configurá tu API key en Ajustes → 🤖 Agente IA</p>';
+    return `
+      <div class="ai-menu-cta">
+        <button class="btn btn--ai btn--full" onclick="App.proposeWeekMenu()" ${hasKey ? '' : 'disabled style="opacity:.5"'}>
+          ✨ Proponer menú semanal con IA
+        </button>
+        ${hint}
+      </div>
+    `;
+  },
+
+  // ============================================
+  // IA: proponer un menú semanal completo respetando metas nutricionales
+  // ============================================
+  async proposeWeekMenu() {
+    if (!AI.hasKey()) {
+      Components.toast.show('Configurá tu API key en Ajustes → 🤖 Agente IA');
+      return;
+    }
+    const recipes = Recipes.getAll();
+    if (recipes.length < 3) {
+      Components.toast.show('Necesitás al menos 3 recetas para generar un menú. Agregá más a tu catálogo.');
+      return;
+    }
+
+    // Advertir si la semana actual tiene contenido (lo va a sobrescribir)
+    const week = Menu.getCurrentWeek();
+    let occupied = 0;
+    Store.getDaysOrder().forEach(d => {
+      if (week?.[d]?.lunch) occupied++;
+      if (week?.[d]?.dinner) occupied++;
+    });
+    if (occupied > 0) {
+      if (!confirm(`Esta semana tiene ${occupied} comida(s) ya asignada(s). La IA va a proponer un menú completo que sobrescribirá lo actual. ¿Continuar?`)) {
+        return;
+      }
+    }
+
+    Components.modal.open('✨ Proponiendo menú…', `
+      <div style="text-align: center; padding: var(--space-lg);">
+        <span class="ai-spinner"></span>
+        <p style="margin-top: 16px; color: var(--color-text-muted);">
+          Armando el mejor menú posible con ${recipes.length} receta(s) del catálogo…
+        </p>
+        <p style="margin-top: 8px; font-size: 12px; color: var(--color-text-muted);">
+          Respetando metas: pescado azul 2-3×, legumbres 2-3×, verdura diaria, cenas ligeras.
+        </p>
+      </div>
+    `);
+
+    try {
+      // Pasamos el menú actual con NOMBRES ya resueltos (no ids) para que la IA
+      // pueda leerlo directamente sin tener que conocer el formato interno.
+      const dayMap = { monday: 'monday', tuesday: 'tuesday', wednesday: 'wednesday',
+                       thursday: 'thursday', friday: 'friday', saturday: 'saturday', sunday: 'sunday' };
+      const resolved = {};
+      Object.values(dayMap).forEach(d => {
+        resolved[d] = {
+          lunch: week?.[d]?.lunch ? (Recipes.getById(week[d].lunch)?.nombre || null) : null,
+          dinner: week?.[d]?.dinner ? (Recipes.getById(week[d].dinner)?.nombre || null) : null,
+        };
+      });
+
+      const result = await AI.proposeWeekMenu(recipes, resolved);
+      this._showProposedMenuModal(result, recipes);
+    } catch (err) {
+      console.error('[proposeWeekMenu]', err);
+      Components.modal.open('✨ Error', `
+        <div style="padding: var(--space-md);">
+          <p style="color: var(--color-error); margin-bottom: 12px;">❌ ${Components.escapeHtml(err.message)}</p>
+          <p style="font-size: 13px; color: var(--color-text-muted); margin-bottom: 16px;">
+            Verificá que la API key esté bien y que tengas conexión a internet.
+          </p>
+          <button class="btn btn--primary btn--full" onclick="Components.modal.close()">Cerrar</button>
+        </div>
+      `);
+    }
+  },
+
+  // Modal de preview del menú propuesto por la IA
+  _showProposedMenuModal(result, recipes) {
+    const mp = result?.menu_propuesto;
+    if (!mp || typeof mp !== 'object') {
+      Components.modal.open('✨ Sin propuesta', `
+        <div style="padding: var(--space-md);">
+          <p>La IA no devolvió una propuesta válida.</p>
+          <button class="btn btn--primary btn--full" onclick="Components.modal.close()">Cerrar</button>
+        </div>
+      `);
+      return;
+    }
+
+    const days = [
+      ['lunes', 'Lun'], ['martes', 'Mar'], ['miercoles', 'Mié'],
+      ['jueves', 'Jue'], ['viernes', 'Vie'], ['sabado', 'Sáb'], ['domingo', 'Dom'],
+    ];
+
+    // Detectar recetas que la IA devolvió pero no existen en el catálogo
+    const available = new Set(recipes.map(r => r.nombre.toLowerCase()));
+    const missingByDay = {};
+    let totalMissing = 0;
+    days.forEach(([key]) => {
+      const d = mp[key];
+      if (!d) return;
+      const missing = [];
+      if (d.comida && !available.has(d.comida.toLowerCase())) missing.push(d.comida);
+      if (d.cena && !available.has(d.cena.toLowerCase())) missing.push(d.cena);
+      if (missing.length) {
+        missingByDay[key] = missing;
+        totalMissing += missing.length;
+      }
+    });
+
+    const rowsHtml = days.map(([key, label]) => {
+      const d = mp[key];
+      if (!d) return '';
+      const hasMissing = missingByDay[key];
+      const c = d.comida
+        ? `<span class="prop-menu__cell ${hasMissing?.includes(d.comida) ? 'prop-menu__cell--missing' : ''}">${Components.escapeHtml(d.comida)}</span>`
+        : '<span class="prop-menu__cell prop-menu__cell--empty">—</span>';
+      const ce = d.cena
+        ? `<span class="prop-menu__cell ${hasMissing?.includes(d.cena) ? 'prop-menu__cell--missing' : ''}">${Components.escapeHtml(d.cena)}</span>`
+        : '<span class="prop-menu__cell prop-menu__cell--empty">—</span>';
+      return `
+        <div class="prop-menu__row">
+          <span class="prop-menu__day">${label}</span>
+          <div class="prop-menu__meals">
+            <div class="prop-menu__meal"><span class="prop-menu__meal-label">Comida</span>${c}</div>
+            <div class="prop-menu__meal"><span class="prop-menu__meal-label">Cena</span>${ce}</div>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Cumplimiento de metas (mini-grid de pills)
+    const cm = result.cumple_metas || {};
+    const metasHtml = Object.keys(cm).length
+      ? `<div class="prop-menu__metas">
+          ${Object.entries(cm).map(([k, v]) =>
+            `<span class="prop-menu__meta"><strong>${Components.escapeHtml(k.replace(/_/g, ' '))}:</strong> ${Components.escapeHtml(String(v))}</span>`
+          ).join('')}
+        </div>`
+      : '';
+
+    const warningsHtml = (result.advertencias && result.advertencias.length)
+      ? `<div class="prop-menu__warnings">
+          <strong>⚠️ Notas:</strong>
+          <ul>${result.advertencias.map(a => `<li>${Components.escapeHtml(a)}</li>`).join('')}</ul>
+        </div>`
+      : '';
+
+    const missingBanner = totalMissing > 0
+      ? `<div class="prop-menu__missing-banner">
+          ⚠️ ${totalMissing} receta(s) sugerida(s) no están en tu catálogo y se omitirán al aplicar:
+          ${Object.values(missingByDay).flat().slice(0, 4).map(m => `<code>${Components.escapeHtml(m)}</code>`).join(', ')}
+          ${totalMissing > 4 ? '…' : ''}
+        </div>`
+      : '';
+
+    // Guardamos la propuesta en App para que el botón la aplique de forma segura
+    // (evitamos inline JSON con comillas/saltos que rompen el onclick).
+    App._aiProposedMenu = mp;
+
+    Components.modal.open('✨ Propuesta de menú', `
+      <div class="prop-menu">
+        ${result.resumen ? `<p class="prop-menu__resumen">${Components.escapeHtml(result.resumen)}</p>` : ''}
+        ${missingBanner}
+        ${metasHtml}
+        <div class="prop-menu__grid">${rowsHtml}</div>
+        ${warningsHtml}
+        <div style="display: flex; gap: 8px; margin-top: 16px;">
+          <button class="btn btn--outline" onclick="Components.modal.close()">Cancelar</button>
+          <button class="btn btn--primary" style="flex: 1;" id="btn-apply-prop-menu">💾 Aplicar a esta semana</button>
+        </div>
+      </div>
+    `);
+
+    const btn = document.getElementById('btn-apply-prop-menu');
+    if (btn) btn.onclick = () => App.applyAiMenu(mp);
   },
 
   // Botones de plantilla que aparecen debajo del grid de la semana

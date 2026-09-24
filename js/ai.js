@@ -445,6 +445,119 @@ Otras reglas:
     return this.extractJson(text);
   },
 
+  systemPromptProposeMenu: `Eres un asistente que planifica el menú semanal de David y María con un objetivo nutricional concreto. Recibís DOS cosas:
+
+1. **CATÁLOGO**: lista de TODAS las recetas disponibles con su nombre, tipo de comida (almuerzo/cena/ambos), tags (incluyendo categorías nutricionales) y datos nutricionales por ración (calorías, carbohidratos, proteínas, grasas).
+2. **MENÚ ACTUAL**: lo que ya hay asignado en esta semana (puede estar vacío, completo o parcial).
+
+Tu trabajo: proponer el MEJOR menú semanal posible usando SOLO recetas del catálogo, respetando metas nutricionales estrictas.
+
+=== METAS SEMANALES OBLIGATORIAS (14 comidas) ===
+- Pescado azul 2-3×/sem (salmón, sardinas, caballa, atún, anchoas, chicharro).
+- Legumbres 2-3×/sem (lentejas, garbanzos, judías, habichuelas, soja, edamame).
+- Pollo o pavo 2-3×/sem (carnes blancas magras).
+- Huevos 2-3×/sem (tortilla, revuelto, duro, pochado).
+- Carne roja ≤1×/sem (ternera, cordero, cerdo magro).
+- Verdura presente todos los días (comida Y cena). Cero días sin verdura en alguna comida.
+- Frituras ≤1-2×/sem. Priorizar horno, vapor, salteado, hervido, plancha suave.
+- Cenas ligeras: bajo HC (≤25 g/ración idealmente), sin frituras, verduras + proteína magra.
+- Almuerzo es la comida más completa (más kcal, más HC complejos); cenas más livianas.
+- Variedad: no repetir la misma proteína 2 días seguidos.
+- Aceite de oliva como grasa principal; evitar mantequcilla, nata, fritos.
+
+=== REGLAS DE USO DEL CATÁLOGO ===
+- Usá SOLO recetas del catálogo. El nombre tiene que COINCIDIR EXACTAMENTE con uno de la lista.
+- Si una receta es claramente de cena (tipoComida=cena), priorizala para ese slot; si es almuerzo, para almuerzo. Si es "ambos", usala donde mejor encaje.
+- Si una receta tiene muy pocos datos nutricionales (cal=0 y hc=0 y proteinas=0), no la penalices por eso pero tratala como neutra.
+- Si no hay suficientes recetas para cumplir TODAS las metas simultáneamente, priorizá las más importantes (pescado azul 2×, legumbres 2×, verdura diaria, frituras ≤1×) y relajá las demás.
+- Si no podés cubrir algún día con verdura, mencionalo en "advertencias".
+
+=== ESTRUCTURA DE SALIDA (JSON estricto, sin markdown) ===
+Devolvé SOLO este objeto (sin texto antes ni después):
+
+{
+  "menu_propuesto": {
+    "lunes":    {"comida": "<nombre exacto>", "cena": "<nombre exacto>"},
+    "martes":   {"comida": "<nombre exacto>", "cena": "<nombre exacto>"},
+    "miercoles":{"comida": "<nombre exacto>", "cena": "<nombre exacto>"},
+    "jueves":   {"comida": "<nombre exacto>", "cena": "<nombre exacto>"},
+    "viernes":  {"comida": "<nombre exacto>", "cena": "<nombre exacto>"},
+    "sabado":   {"comida": "<nombre exacto>", "cena": "<nombre exacto>"},
+    "domingo":  {"comida": "<nombre exacto>", "cena": "<nombre exacto>"}
+  },
+  "resumen": "2-3 frases amigables: qué se priorizó, qué metas se cumplen, puntos fuertes del menú.",
+  "cumple_metas": {
+    "pescado_azul": "X/2-3",
+    "legumbres": "X/2-3",
+    "pollo_pavo": "X/2-3",
+    "huevos": "X/2-3",
+    "carne_roja": "X (≤1)",
+    "verdura_diaria": "X/7 días",
+    "frituras": "X (≤1-2)"
+  },
+  "advertencias": ["..."]
+}
+
+Notas:
+- "advertencias": array vacío si todo encaja. Si hay huecos, explicar brevemente qué falta (ej: "No hay receta de legumbres en el catálogo, considerá añadir alguna").
+- Si el catálogo tiene <14 recetas distintas, podés repetir recetas en días diferentes (es OK, siempre que respeten variedad de proteína).
+- Respondé SIEMPRE en español, tuteando.`,
+
+  // ============================================
+  // Propone un menú semanal completo respetando las metas nutricionales.
+  // Recibe las recetas del catálogo (de Recipes.getAll()) y el menú actual.
+  // Devuelve {menu_propuesto, resumen, cumple_metas, advertencias}.
+  // ============================================
+  async proposeWeekMenu(recipes, currentWeek) {
+    // Construir el catálogo con la info que la IA necesita para clasificar.
+    const catalog = recipes.map(r => {
+      const tags = (r.tags || []).join(', ');
+      const tipo = r.tipoComida || 'ambos';
+      const n = r.nutricion || {};
+      return `- "${r.nombre}" | tipo:${tipo} | tags:${tags || '-'} ` +
+             `| cal:${n.cal ?? 0} hc:${n.hc ?? 0} prot:${n.proteinas ?? 0} grasas:${n.grasas ?? 0}`;
+    }).join('\n');
+
+    // Menú actual (para que la IA vea qué hay y proponga cambios coherentes)
+    const dayNames = { monday: 'lunes', tuesday: 'martes', wednesday: 'miercoles',
+                       thursday: 'jueves', friday: 'viernes', saturday: 'sabado', sunday: 'domingo' };
+    let currentMenuTxt = '(vacío — propuesta desde cero)';
+    if (currentWeek && typeof currentWeek === 'object') {
+      // Aceptamos dos formatos: ids (Menu.getCurrentWeek()) o ya resuelto a nombres.
+      // Si recibimos string ids, el caller debe pasar `currentWeek` como map {day:{meal: nombre}}
+      // o {day:{meal: id}}. Detectamos heurísticamente.
+      const looksResolved = Object.values(currentWeek).some(d => {
+        const meal = d?.lunch ?? d?.comida;
+        return meal && typeof meal === 'string' && recipes.some(r => r.nombre === meal);
+      });
+      const lines = Object.keys(currentWeek).map(day => {
+        const d = currentWeek[day] || {};
+        const lunchId = d.lunch ?? d.comida ?? null;
+        const dinnerId = d.dinner ?? d.cena ?? null;
+        const lunchName = !lunchId ? '—'
+          : looksResolved ? lunchId
+          : (recipes.find(r => r.id === lunchId)?.nombre || '—');
+        const dinnerName = !dinnerId ? '—'
+          : looksResolved ? dinnerId
+          : (recipes.find(r => r.id === dinnerId)?.nombre || '—');
+        const esDay = dayNames[day] || day;
+        return `${esDay}: comida=${lunchName} | cena=${dinnerName}`;
+      });
+      currentMenuTxt = lines.join('\n');
+    }
+
+    const userPrompt =
+      `=== CATÁLOGO DE RECETAS DISPONIBLES (${recipes.length}) ===\n${catalog}\n\n` +
+      `=== MENÚ ACTUAL DE LA SEMANA ===\n${currentMenuTxt}\n\n` +
+      `Proponé el mejor menú semanal posible respetando las metas nutricionales.`;
+
+    const text = await this.call([
+      { role: 'system', content: this.systemPromptProposeMenu },
+      { role: 'user', content: userPrompt },
+    ], { json: true, temperature: 0.7 });
+    return this.extractJson(text);
+  },
+
   // Chat libre con contexto de menú y recetas disponibles
   async chatMenu(userMessage, ctx) {
     const recipes = ctx.recipes || [];
