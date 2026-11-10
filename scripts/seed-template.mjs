@@ -47,12 +47,12 @@ const TEMPLATE_KEY_PREFIX = 'tpl:';
 
 // ---------- la plantilla ----------
 const PLAN = {
-  monday:    { lunch: 'Arroz a la cubana',                    dinner: 'Ensalada de pollo' },
+  monday:    { lunch: 'Arroz a la cubana',                    dinner: 'Aliño de tomate y pimiento' },
   tuesday:   { lunch: 'Lomo con pimientos',                   dinner: 'Merluza a la donostiarra' },
   wednesday: { lunch: 'Garbanzos al horno',                   dinner: 'Tortilla de verduras' },
   thursday:  { lunch: 'Pollo al horno al curri',              dinner: 'Salmón Papillote' },
   friday:    { lunch: "Pasta con salsa de tomate (Cherry’s)", dinner: 'Revuelto de setas' },
-  saturday:  { lunch: 'Codillo',                              dinner: 'Ensalada de rúcula con cherrys' },
+  saturday:  { lunch: 'Patatas con huevo',                     dinner: 'Ensalada de rúcula con cherrys' },
   sunday:    { lunch: 'Arroz negro',                           dinner: 'Tortilla de atún' },
 };
 

@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v39 (2026-11-10)',
+  VERSION: 'v40 (2026-11-10)',
 
   // ============================================
   // Initialize
