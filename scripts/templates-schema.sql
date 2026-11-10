@@ -1,9 +1,16 @@
 -- ============================================
--- Menu templates — schema
+-- Menu templates — schema (LEGACY / opcional)
 -- ============================================
 -- Tabla para guardar plantillas de menú reutilizables.
 -- Misma estructura de `data` que una fila de `menu_weeks` (7 días ×
 -- {lunch, dinner} con id de receta o null).
+--
+-- ⚠️ LA APP NO USA ESTA TABLA. Las plantillas se guardan en
+--    `menu_weeks` con la clave `tpl:<id>` (ver db.js TEMPLATE_KEY_PREFIX),
+--    porque esta tabla tenía policies solo para `authenticated` y la app
+--    usa el rol `anon` → 42501 al insertar.
+--    Se deja el schema (con las policies ya corregidas) por si algún día
+--    se quiere migrar las plantillas a una tabla dedicada.
 
 create table menu_templates (
   id          uuid primary key default gen_random_uuid(),

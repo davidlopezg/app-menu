@@ -4,9 +4,10 @@
 //
 // Uso:  node scripts/seed-template.mjs
 //
-// ⚠️ Requiere que las policies de `menu_templates` permitan el rol `anon`.
-//    Si no, falla con 42501. Fix: correr scripts/fix-templates-rls.sql
-//    en el SQL Editor de Supabase.
+// Las plantillas se guardan en la tabla `menu_weeks` con la clave `tpl:<id>`
+// (misma convención que usa la app). OJO: la tabla `menu_templates` NO se
+// usa porque sus policies RLS solo permiten el rol `authenticated` y la app
+// usa el rol `anon` → 42501 al insertar.
 //
 // La plantilla se define por NOMBRE de receta (legible). El script busca
 // los ids reales en la tabla `recipes`, arma la estructura `dias`
@@ -42,6 +43,7 @@ const headers = {
 
 // ---------- id fijo → re-correr actualiza, no duplica ----------
 const TEMPLATE_ID = 'a1b2c3d4-0000-4000-8000-000000000001';
+const TEMPLATE_KEY_PREFIX = 'tpl:';
 
 // ---------- la plantilla ----------
 const PLAN = {
@@ -98,14 +100,12 @@ if (faltan.length) {
 
 // ---------- 2. upsert ----------
 const row = {
-  id: TEMPLATE_ID,
-  nombre: NOMBRE,
-  descripcion: DESCRIPCION,
-  data: dias,
+  week_key: TEMPLATE_KEY_PREFIX + TEMPLATE_ID,
+  data: { nombre: NOMBRE, descripcion: DESCRIPCION, dias },
   updated_at: new Date().toISOString(),
 };
 
-const res = await fetch(`${URL_BASE}/rest/v1/menu_templates?on_conflict=id`, {
+const res = await fetch(`${URL_BASE}/rest/v1/menu_weeks?on_conflict=week_key`, {
   method: 'POST',
   headers: { ...headers, Prefer: 'resolution=merge-duplicates' },
   body: JSON.stringify(row),
@@ -118,7 +118,7 @@ if (!res.ok) {
 
 // ---------- 3. resumen ----------
 const nameOf = (id) => recipes.find(r => r.id === id)?.nombre || '?';
-console.log(`✅ Plantilla "${NOMBRE}" guardada (${TEMPLATE_ID})\n`);
+console.log(`✅ Plantilla "${NOMBRE}" guardada (${TEMPLATE_KEY_PREFIX}${TEMPLATE_ID})\n`);
 for (const day of DAYS) {
   console.log(`  ${day.padEnd(10)} lunch: ${nameOf(dias[day].lunch).padEnd(40)} dinner: ${nameOf(dias[day].dinner)}`);
 }

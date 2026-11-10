@@ -41,6 +41,20 @@ const DB = {
 
   USER_KEY: 'menuapp_user',   // localStorage key de la "sesión" (email del usuario)
 
+  // Las plantillas se guardan en la tabla `menu_weeks` con la clave
+  // `tpl:<id>` en vez de en `menu_templates`.
+  // MOTIVO: la tabla `menu_templates` tiene las policies RLS creadas solo
+  // para el rol `authenticated`, y la app usa la anon key (rol `anon`) →
+  // todo insert rebotaba con 42501 y la plantilla NUNCA llegaba a la nube.
+  // `menu_weeks` sí acepta escrituras con `anon` y tiene unique en
+  // week_key, así que sirve perfecto (una plantilla es, de hecho, una
+  // semana: 7 días × {lunch, dinner}).
+  TEMPLATE_KEY_PREFIX: 'tpl:',
+
+  // Ids de plantilla que sabemos que están en la nube (para borrar las
+  // que el usuario elimina).
+  _knownTplIds: new Set(),
+
   // ============================================
   // Init
   // ============================================
@@ -125,8 +139,14 @@ const DB = {
     localStorage.removeItem(this.USER_KEY);
     Store.remove(Store.KEYS.RECIPES);
     Store.remove(Store.KEYS.MENU);
+    Store.remove(Store.KEYS.TEMPLATES);
     if (typeof Recipes !== 'undefined') Recipes._recipes = null;
     if (typeof Menu !== 'undefined')    Menu._menu = null;
+    if (typeof Templates !== 'undefined') {
+      Templates._list = [];
+      Templates._currentId = null;
+    }
+    this._knownTplIds = new Set();
     this._unsubscribe();
   },
 
@@ -179,15 +199,12 @@ const DB = {
       const [
         { data: recipes, error: e1 },
         { data: weeks, error: e2 },
-        { data: templates, error: e3 },
       ] = await Promise.all([
         this.client.from('recipes').select('*'),
         this.client.from('menu_weeks').select('*'),
-        this.client.from('menu_templates').select('*'),
       ]);
       if (e1) console.error('pull recipes:', e1);
       if (e2) console.error('pull weeks:', e2);
-      if (e3) console.error('pull templates:', e3);
 
       // FIX #2: solo pisar localStorage si Supabase trae filas.
       // Antes, si el usuario era nuevo y Supabase devolvía [] (caso normal
@@ -210,28 +227,40 @@ const DB = {
         if (typeof Recipes !== 'undefined') Recipes._recipes = mapped;
       }
 
+      // Las filas con clave `tpl:` son plantillas; el resto, semanas.
       if (weeks && weeks.length > 0) {
         const menu = {};
-        weeks.forEach(w => { menu[w.week_key] = w.data; });
-        Store.set(Store.KEYS.MENU, menu);
-        if (typeof Menu !== 'undefined') {
-          Menu._menu = menu;
-          if (!Menu._currentWeek) Menu._currentWeek = Store.getWeekKey();
-        }
-      }
+        const tplRows = [];
+        weeks.forEach(w => {
+          if (typeof w.week_key === 'string' && w.week_key.startsWith(this.TEMPLATE_KEY_PREFIX)) {
+            tplRows.push(w);
+          } else {
+            menu[w.week_key] = w.data;
+          }
+        });
 
-      if (templates && templates.length > 0) {
-        const mapped = templates.map(t => ({
-          id: t.id,
-          nombre: t.nombre,
-          descripcion: t.descripcion || '',
-          dias: t.data || {},
-          updatedAt: t.updated_at,
-        }));
-        Store.set(Store.KEYS.TEMPLATES, mapped);
-        if (typeof Templates !== 'undefined') {
-          Templates._list = mapped;
-          Templates._currentId = mapped[0]?.id || null;
+        if (Object.keys(menu).length > 0) {
+          Store.set(Store.KEYS.MENU, menu);
+          if (typeof Menu !== 'undefined') {
+            Menu._menu = menu;
+            if (!Menu._currentWeek) Menu._currentWeek = Store.getWeekKey();
+          }
+        }
+
+        if (tplRows.length > 0) {
+          const mapped = tplRows.map(w => ({
+            id: w.week_key.slice(this.TEMPLATE_KEY_PREFIX.length),
+            nombre: w.data?.nombre || 'Mi plantilla',
+            descripcion: w.data?.descripcion || '',
+            dias: w.data?.dias || {},
+            updatedAt: w.updated_at,
+          }));
+          Store.set(Store.KEYS.TEMPLATES, mapped);
+          if (typeof Templates !== 'undefined') {
+            Templates._list = mapped;
+            Templates._currentId = mapped[0]?.id || null;
+          }
+          this._knownTplIds = new Set(mapped.map(t => t.id));
         }
       }
     } finally {
@@ -267,9 +296,8 @@ const DB = {
         // Primer error del período → toast completo con mensaje real
         let msg;
         if (error?.code === '42501') {
-          // RLS: la tabla no tiene policy para el rol `anon`.
-          // Caso conocido: menu_templates (fix en scripts/fix-templates-rls.sql).
-          msg = '⚠️ Permisos de Supabase: corré scripts/fix-templates-rls.sql';
+          // RLS: la tabla no tiene policy para el rol `anon` que usa la app.
+          msg = '⚠️ Permisos de Supabase: falta policy RLS para el rol anon';
         } else if (error?.message) {
           msg = `⚠️ Guardé localmente pero no se sincronizó (${String(error.message).slice(0, 100)})`;
         } else {
@@ -373,18 +401,38 @@ const DB = {
     }
   },
 
+  // Plantillas → `menu_weeks` con clave `tpl:<id>` (ver TEMPLATE_KEY_PREFIX).
+  // Además borra de la nube las plantillas que ya no están en la lista:
+  // sin esto, al borrar una plantilla la fila quedaba viva en Supabase y
+  // el siguiente pullAll la traía de vuelta (la plantilla "no se borraba").
   async pushTemplates(templates) {
     if (!this.client || this._pulling) return;
     if (!this.isAuth()) return;
-    if (!templates || templates.length === 0) return;
-    const rows = templates.map(t => ({
-      id: t.id,
-      nombre: t.nombre,
-      descripcion: t.descripcion || '',
-      data: t.dias || {},
+    const list = templates || [];
+    const ids = list.map(t => t.id);
+
+    for (const oldId of this._knownTplIds) {
+      if (ids.includes(oldId)) continue;
+      const { error } = await this.client
+        .from('menu_weeks')
+        .delete()
+        .eq('week_key', this.TEMPLATE_KEY_PREFIX + oldId);
+      if (error) this._reportSyncError('pushTemplates', error);
+    }
+    this._knownTplIds = new Set(ids);
+
+    if (list.length === 0) return;
+
+    const rows = list.map(t => ({
+      week_key: this.TEMPLATE_KEY_PREFIX + t.id,
+      data: {
+        nombre: t.nombre || 'Mi plantilla',
+        descripcion: t.descripcion || '',
+        dias: t.dias || {},
+      },
       updated_at: t.updatedAt || new Date().toISOString(),
     }));
-    const { error } = await this.client.from('menu_templates').upsert(rows);
+    const { error } = await this.client.from('menu_weeks').upsert(rows);
     if (error) {
       this._reportSyncError('pushTemplates', error);
     } else {
@@ -403,8 +451,6 @@ const DB = {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'recipes' },
         () => this._onRemoteChange())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_weeks' },
-        () => this._onRemoteChange())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_templates' },
         () => this._onRemoteChange())
       .subscribe();
   },

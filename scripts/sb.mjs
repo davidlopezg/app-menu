@@ -85,7 +85,16 @@ try {
       break;
     }
     case 'templates': {
-      console.log(JSON.stringify(await rest('menu_templates?select=*'), null, 2));
+      // Las plantillas viven en menu_weeks con la clave `tpl:<id>`
+      const rows = await rest('menu_weeks?select=*&week_key=like.tpl:*');
+      if (rows.length === 0) { console.log('(sin plantillas)'); break; }
+      rows.forEach(r => {
+        console.log(`\n${r.week_key}  ${r.data?.nombre || ''}`);
+        console.log(`  ${r.data?.descripcion || ''}`);
+        for (const [day, v] of Object.entries(r.data?.dias || {})) {
+          console.log(`  ${day.padEnd(10)} lunch=${v.lunch || '-'}  dinner=${v.dinner || '-'}`);
+        }
+      });
       break;
     }
     case 'login': {

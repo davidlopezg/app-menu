@@ -44,25 +44,26 @@ y habilita `sb.mjs sql` (p. ej. para resetear la contraseña de un usuario).
 Una plantilla es una semana reutilizable (7 días × almuerzo/cena) que se puede
 aplicar a la semana actual o a otra.
 
-- Desde la app: botón **📋 Guardar como plantilla** (deajo del grid) → editás
+- Desde la app: botón **📋 Guardar como plantilla** (dejo del grid) → editás
   la plantilla en **✏️ Editar plantilla** → **🔁 Aplicar**.
 - Sin plantilla todavía: **🧪 Usar plantilla de ejemplo** (semana base con las
   recetas del catálogo; si falta algún plato, esa celda queda vacía).
+- Hay una plantilla ya sembrada en la nube: **"Semana tipo"**.
 
-### ⚠️ Si la plantilla no llega a la nube
+### Dónde se guardan
 
-La app usa la `anon` key (rol `anon`). Las policies de `menu_templates`
-estaban creadas solo para `authenticated` → Supabase rebotaba el INSERT con
-`42501 new row violates row-level security policy`. La plantilla se guardaba
-en el navegador pero no se sincronizaba.
+En la tabla `menu_weeks` con la clave `tpl:<id>` (NO en `menu_templates`):
+las policies RLS de `menu_templates` solo permitían el rol `authenticated` y
+la app usa la `anon` key → todo insert rebotaba con `42501` y la plantilla
+nunca llegaba a la nube. Como una plantilla ES una semana (7 días ×
+{lunch, dinner}), `menu_weeks` la guarda perfecto (además ya tiene unique en
+`week_key` → upsert idempotente).
 
-**Fix (una sola vez):** Supabase → SQL Editor → New query → pegá
-`scripts/fix-templates-rls.sql` → Run. Es idempotente.
-
-Después podés sembrar la plantilla desde la CLI:
+CLI:
 
 ```bash
-node scripts/seed-template.mjs   # sube la plantilla "Semana tipo" a Supabase
+node scripts/seed-template.mjs   # sube/actualiza la plantilla "Semana tipo"
+node scripts/sb.mjs menu         # lista semanas (incluye las tpl:*)
 ```
 
 ## Desarrollo local
