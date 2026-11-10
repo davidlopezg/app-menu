@@ -17,10 +17,18 @@ alter table menu_templates enable row level security;
 
 -- Las mismas policies que recipes/menu_weeks: todo abierto para usuarios
 -- autenticados (la whitelist real se hace en la RPC login_user).
-create policy "auth read templates"   on menu_templates for select to authenticated using (true);
-create policy "auth insert templates" on menu_templates for insert to authenticated with check (true);
-create policy "auth update templates" on menu_templates for update to authenticated using (true) with check (true);
-create policy "auth delete templates" on menu_templates for delete to authenticated using (true);
+--
+-- OJO: el cliente usa la `anon` key → el rol real es `anon`, NO
+-- `authenticated`. Con policies `to authenticated` el INSERT rebotaba con
+-- 42501 y la plantilla nunca llegaba a la nube. Por eso van `anon` también.
+create policy "templates read"   on menu_templates for select to anon, authenticated using (true);
+create policy "templates insert" on menu_templates for insert to anon, authenticated with check (true);
+create policy "templates update" on menu_templates for update to anon, authenticated using (true) with check (true);
+create policy "templates delete" on menu_templates for delete to anon, authenticated using (true);
+
+-- Grants para `anon` (idempotente)
+grant usage on schema public to anon;
+grant select, insert, update, delete on menu_templates to anon;
 
 -- Realtime: cambios de la otra persona se ven al toque
 alter publication supabase_realtime add table menu_templates;

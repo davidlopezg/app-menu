@@ -1,3 +1,6 @@
 # Local Pi runtime state
 .atl/
 __pycache__/
+
+# Credenciales locales de Supabase (solo este proyecto)
+.env

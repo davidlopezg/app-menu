@@ -265,9 +265,16 @@ const DB = {
     if (typeof Components !== 'undefined' && Components.toast) {
       if (!isThrottled) {
         // Primer error del período → toast completo con mensaje real
-        const msg = error?.message
-          ? `⚠️ Guardé localmente pero no se sincronizó (${String(error.message).slice(0, 100)})`
-          : '⚠️ Guardé localmente pero no se sincronizó a la nube';
+        let msg;
+        if (error?.code === '42501') {
+          // RLS: la tabla no tiene policy para el rol `anon`.
+          // Caso conocido: menu_templates (fix en scripts/fix-templates-rls.sql).
+          msg = '⚠️ Permisos de Supabase: corré scripts/fix-templates-rls.sql';
+        } else if (error?.message) {
+          msg = `⚠️ Guardé localmente pero no se sincronizó (${String(error.message).slice(0, 100)})`;
+        } else {
+          msg = '⚠️ Guardé localmente pero no se sincronizó a la nube';
+        }
         Components.toast.show(msg);
         this._lastSyncErrorToast = now;
       }

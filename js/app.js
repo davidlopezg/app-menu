@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v37 (2025-09-24)',
+  VERSION: 'v38 (2026-11-10)',
 
   // ============================================
   // Initialize
@@ -647,6 +647,17 @@ const App = {
     else this.renderMenuView();
   },
 
+  // Crea la plantilla de ejemplo ("Semana tipo") desde el catálogo.
+  // Las celdas cuyo plato no exista en tus recetas quedan vacías.
+  createTemplateFromExample() {
+    const res = Templates.createFromExample();
+    const faltan = res.faltan.length
+      ? ` — no encontré: ${res.faltan.join(', ')}`
+      : '';
+    Components.toast.show(`✅ Plantilla "${res.template.nombre}" creada${faltan}`);
+    this.renderTemplateView();
+  },
+
   // Aplica la plantilla a la semana actual
   applyTemplateToCurrent() {
     if (!Templates.hasAny()) {
@@ -968,6 +979,10 @@ const App = {
             <p class="signin-card__hint">Creá una a partir de la semana actual o empezá desde cero.</p>
             <button class="btn btn--primary btn--full" onclick="App.saveCurrentAsTemplate()">
               📋 Crear desde esta semana
+            </button>
+            <button class="btn btn--secondary btn--full" style="margin-top: 8px;"
+                    onclick="App.createTemplateFromExample()">
+              🧪 Usar plantilla de ejemplo
             </button>
             <button class="btn btn--ghost btn--full" style="margin-top: 8px;"
                     onclick="App.navigate('menu')">

@@ -10,6 +10,27 @@ const Templates = {
   _list: null,        // array de templates en localStorage
   _currentId: null,   // id de la plantilla activa (la única por ahora)
 
+  // ============================================
+  // Plantilla de ejemplo
+  // ============================================
+  // Definida por NOMBRE de receta (legible). Al crearla se resuelve
+  // contra el catálogo real (Recipes) y cada celda que no encuentre
+  // queda vacía — así nunca rompe si falta alguna receta.
+  // Editá `plan` para cambiar los platos.
+  EXAMPLE: {
+    nombre: 'Semana tipo',
+    descripcion: 'Semana base: pescado 2 veces, pollo, carne, legumbres y verduras cada día.',
+    plan: {
+      monday:    { lunch: 'Arroz a la cubana',                     dinner: 'Ensalada de pollo' },
+      tuesday:   { lunch: 'Lomo con pimientos',                    dinner: 'Merluza a la donostiarra' },
+      wednesday: { lunch: 'Garbanzos al horno',                    dinner: 'Tortilla de verduras' },
+      thursday:  { lunch: 'Pollo al horno al curri',               dinner: 'Salmón Papillote' },
+      friday:    { lunch: "Pasta con salsa de tomate (Cherry’s)", dinner: 'Revuelto de setas' },
+      saturday:  { lunch: 'Codillo',                               dinner: 'Ensalada de rúcula con cherrys' },
+      sunday:    { lunch: 'Arroz negro',                            dinner: 'Tortilla de atún' },
+    }
+  },
+
   init() {
     this._list = Store.get(Store.KEYS.TEMPLATES) || [];
     if (this._list.length === 0) {
@@ -102,6 +123,62 @@ const Templates = {
     this._list = this._list.filter(t => t.id !== this._currentId);
     this._currentId = this._list[0]?.id || null;
     this._save();
+  },
+
+  // ============================================
+  // Plantilla de ejemplo
+  // ============================================
+
+  // Normaliza texto para comparar nombres de receta
+  // (minúsculas, sin tildes, espacios colapsados)
+  _norm(s) {
+    return (s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  },
+
+  // Convierte un plan { dia: { lunch: 'nombre', dinner: 'nombre' } }
+  // en la estructura `dias` de la app, resolviendo nombres → ids.
+  // Devuelve { dias, faltan: [nombres no encontrados] }.
+  resolvePlan(plan) {
+    const byName = new Map();
+    if (typeof Recipes !== 'undefined') {
+      Recipes.getAll().forEach(r => byName.set(this._norm(r.nombre), r.id));
+    }
+    const dias = {};
+    const faltan = [];
+    Store.getDaysOrder().forEach(day => {
+      dias[day] = { lunch: null, dinner: null };
+      Store.getMealTypes().forEach(meal => {
+        const name = plan?.[day]?.[meal];
+        if (!name) return;
+        const id = byName.get(this._norm(name));
+        if (id) dias[day][meal] = id;
+        else faltan.push(name);
+      });
+    });
+    return { dias, faltan };
+  },
+
+  // Crea la plantilla de ejemplo (sustituye la actual).
+  // Devuelve { template, faltan }.
+  createFromExample() {
+    const ex = this.EXAMPLE;
+    const { dias, faltan } = this.resolvePlan(ex.plan);
+    const tpl = {
+      id: Store.uuid(),
+      nombre: ex.nombre,
+      descripcion: ex.descripcion,
+      dias,
+      updatedAt: new Date().toISOString(),
+    };
+    this._list = [tpl];
+    this._currentId = tpl.id;
+    this._save();
+    return { template: tpl, faltan };
   },
 
   // ============================================

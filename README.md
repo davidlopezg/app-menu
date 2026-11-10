@@ -21,6 +21,50 @@ Todos los datos se guardan en **localStorage** del navegador:
 
 > ⚠️ Los datos se borran si limpias el navegador. Para backup, exporta tus recetas manualmente.
 
+## Conexión a Supabase (este proyecto)
+
+Las credenciales viven en `.env` (ignorado por git). La conexión se usa con
+`scripts/sb.mjs`, un CLI sin dependencias:
+
+```bash
+node scripts/sb.mjs recipes 20        # listar recetas
+node scripts/sb.mjs recipe <id>        # receta completa
+node scripts/sb.mjs menu               # menús semanales guardados
+node scripts/sb.mjs templates          # plantillas
+node scripts/sb.mjs login <email> <pass>   # probar login (RPC login_user)
+node scripts/sb.mjs rpc <fn> '<json>'  # cualquier RPC
+node scripts/sb.mjs sql "<query>"      # SQL directo (requiere DATABASE_URL en .env)
+```
+
+`DATABASE_URL` se saca de Supabase → Project Settings → Database → Connection string
+y habilita `sb.mjs sql` (p. ej. para resetear la contraseña de un usuario).
+
+## Plantillas de menú
+
+Una plantilla es una semana reutilizable (7 días × almuerzo/cena) que se puede
+aplicar a la semana actual o a otra.
+
+- Desde la app: botón **📋 Guardar como plantilla** (deajo del grid) → editás
+  la plantilla en **✏️ Editar plantilla** → **🔁 Aplicar**.
+- Sin plantilla todavía: **🧪 Usar plantilla de ejemplo** (semana base con las
+  recetas del catálogo; si falta algún plato, esa celda queda vacía).
+
+### ⚠️ Si la plantilla no llega a la nube
+
+La app usa la `anon` key (rol `anon`). Las policies de `menu_templates`
+estaban creadas solo para `authenticated` → Supabase rebotaba el INSERT con
+`42501 new row violates row-level security policy`. La plantilla se guardaba
+en el navegador pero no se sincronizaba.
+
+**Fix (una sola vez):** Supabase → SQL Editor → New query → pegá
+`scripts/fix-templates-rls.sql` → Run. Es idempotente.
+
+Después podés sembrar la plantilla desde la CLI:
+
+```bash
+node scripts/seed-template.mjs   # sube la plantilla "Semana tipo" a Supabase
+```
+
 ## Desarrollo local
 
 ```bash
