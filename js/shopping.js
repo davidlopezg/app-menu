@@ -117,6 +117,11 @@ const Shopping = {
     'tomates cherry': 'tomate cherry',
     'vinagre de modena o de jerez': 'vinagre de jerez',
     'lomo con pimientos': 'lomo con pimientos',
+    'alubias cocidas': 'alubias',
+    'alubias blancas cocidas': 'alubias',
+    'setas variadas': 'setas',
+    'butifarra de perol o negra': 'butifarra',
+    'huevo': 'huevos',
   },
 
   // Cómo se muestra cada canónico (con tildes y mayúscula)
@@ -145,6 +150,9 @@ const Shopping = {
     'tomate cherry': 'Tomate cherry',
     'vinagre de jerez': 'Vinagre de Jerez',
     'lomo con pimientos': 'Lomo con pimientos',
+    'alubias': 'Alubias',
+    'setas': 'Setas',
+    'butifarra': 'Butifarra',
   },
 
   // Nombre canónico de un ingrediente (para agrupar y para los precios)

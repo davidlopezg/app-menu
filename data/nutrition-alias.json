@@ -89,7 +89,12 @@
     "pimienta en grano": "sal",
     "pimienta negra recien molida": "sal",
     "queso cheddar en lonchas": "queso cheddar",
-    "tomate cherry": "tomates cherry"
+    "tomate cherry": "tomates cherry",
+    "alubias cocidas": "alubias blancas cocidas",
+    "alubias": "alubias blancas cocidas",
+    "setas variadas": "setas",
+    "setas variadas (champinones)": "setas",
+    "butifarra de perol o negra": "butifarra"
   },
   "sin_calcular": {
     "sal": 0,
