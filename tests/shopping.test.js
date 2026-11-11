@@ -80,14 +80,22 @@ const item = nombre => items.find(i => i.nombre.toLowerCase() === nombre.toLower
 check('agrega los 3 días con recetas (sin condimentos)', items.length === 6, `items=${items.length}`);
 check('suma la misma unidad (arroz 300g + 200g = 500g)', item('Arroz blanco')?.cantidad === '500 g', item('Arroz blanco')?.cantidad);
 check('no mezcla unidades (patatas 500 g)', item('Patatas')?.cantidad === '500 g');
-check('merluza 4 unidades → 4 ud', item('Merluza en rodajas')?.cantidad === '4 ud', item('Merluza en rodajas')?.cantidad);
+check('merluza 4 unidades → 4 ud (unificada con "Merluza en rodajas")', item('Merluza')?.cantidad === '4 ud', item('Merluza')?.cantidad);
 check('ajo 2 dientes', item('Ajo')?.cantidad === '2 dientes', item('Ajo')?.cantidad);
 check('los condimentos ("al gusto") quedan fuera de la lista', !items.some(i => i.nombre === 'Sal'));
+
+check('los sinónimos se unifican (Dientes de ajo → Ajo)', items.filter(i => i.nombre.toLowerCase().includes('ajo')).length === 1,
+  items.filter(i => i.nombre.toLowerCase().includes('ajo')).map(i => i.nombre + ':' + i.cantidad).join(' | '));
+
+console.log('\n=== DE QUÉ PLATO VIENE ===');
+check('indica el plato de origen', Shopping._de(item('Patatas')) === 'de Merluza', Shopping._de(item('Patatas')));
+check('indica el día y la comida', Shopping._donde(item('Patatas')) === 'mié cena', Shopping._donde(item('Patatas')));
+check('indica el origen de un ingrediente repetido', Shopping._de(item('Arroz blanco')) === 'de 2 platos', Shopping._de(item('Arroz blanco')));
 
 console.log('\n=== CATEGORÍAS ===');
 check('tomate → verduras', item('Tomate triturado')?.categoria === 'verduras', item('Tomate triturado')?.categoria);
 check('pollo → carnicería', item('Pollo')?.categoria === 'carniceria', item('Pollo')?.categoria);
-check('merluza → pescado', item('Merluza en rodajas')?.categoria === 'pescado', item('Merluza en rodajas')?.categoria);
+check('merluza → pescado', item('Merluza')?.categoria === 'pescado', item('Merluza')?.categoria);
 check('arroz → despensa', item('Arroz blanco')?.categoria === 'despensa', item('Arroz blanco')?.categoria);
 
 console.log('\n=== PRECIOS ===');

@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v42 (2026-11-10)',
+  VERSION: 'v43 (2026-11-10)',
 
   // ============================================
   // Initialize
@@ -1022,6 +1022,7 @@ const App = {
                      <span class="shop-item__shop">${Components.escapeHtml(it.tienda.nombre)}</span>`
                   : ''}
               </div>
+              <div class="shop-item__from">${Components.escapeHtml(Shopping._donde(it))} · ${Components.escapeHtml(Shopping._de(it))}</div>
             </div>
             <button class="shop-item__tag" onclick="App.openPriceModal('${Components.escapeHtml(it.key)}')"
                     aria-label="Poner precio">🏷️</button>
@@ -1083,7 +1084,8 @@ const App = {
 
     Components.modal.open(`🏷️ ${item.nombre}`, `
       <p style="color: var(--color-text-muted); font-size: 13px; margin-bottom: 12px;">
-        Cantidad en la lista: <strong>${Components.escapeHtml(item.cantidad)}</strong>
+        Cantidad en la lista: <strong>${Components.escapeHtml(item.cantidad)}</strong><br>
+        Viene de: <strong>${Components.escapeHtml(Shopping._de(item))}</strong> (${Components.escapeHtml(Shopping._donde(item))})
       </p>
 
       <label style="font-size: 13px; color: var(--color-text-muted);">Tienda</label>
@@ -1651,12 +1653,19 @@ const App = {
   // ============================================
   prevWeek() {
     Menu.prevWeek();
-    this.renderMenuView();
+    this._renderCurrentView();
   },
 
   nextWeek() {
     Menu.nextWeek();
-    this.renderMenuView();
+    this._renderCurrentView();
+  },
+
+  // Re-renderiza la vista en la que estás (la semana cambiaba y te sacaba
+  // de la lista de la compra al menú)
+  _renderCurrentView() {
+    if (this.currentView === 'shopping') this.renderShoppingView();
+    else this.renderMenuView();
   },
 
   // ============================================

@@ -78,6 +78,81 @@ const Shopping = {
       .trim();
   },
 
+  // Ingredientes que son lo mismo pero con nombres distintos en las recetas.
+  // Se unifican para que la lista no los repetition y el precio serve para
+  // todos (ej: "Ajo" y "Dientes de ajo" → un solo "Ajo").
+  ALIAS_ING: {
+    'dientes de ajo': 'ajo',
+    'aceite de oliva virgen extra': 'aceite de oliva',
+    'pimientos rojos': 'pimiento rojo',
+    'pimientos verdes': 'pimiento verde',
+    'tomates maduros': 'tomate maduro',
+    'tomates maduros variados': 'tomate maduro',
+    'perejil fresco': 'perejil',
+    'perejil picado': 'perejil',
+    'setas variadas (champinones, shiitake)': 'setas',
+    'setas variadas (champinones)': 'setas',
+    'arroz bomba o calasparra': 'arroz blanco',
+    'arroz basmati': 'arroz blanco',
+    'arroz jazmin o de grano corto': 'arroz blanco',
+    'filetes de salmon': 'salmon',
+    'lomo de cerdo en filetes': 'lomo de cerdo',
+    'merluza en rodajas': 'merluza',
+    'filetes de lenguado': 'lenguado',
+    'gambas peladas': 'gambas',
+    'mejillones frescos': 'mejillones',
+    'almejas': 'almejas',
+    'queso parmesano rallado': 'queso parmesano',
+    'queso parmesano en lascas': 'queso parmesano',
+    'atun en lata escurrido': 'atun en lata',
+    'atun en lata al natural': 'atun en lata',
+    'pollo (muslos o entero en piezas)': 'pollo',
+    'pechuga de pollo en cubos': 'pechuga de pollo',
+    'pollo a la plancha (pechuga)': 'pechuga de pollo',
+    'yogur natural': 'yogur',
+    'huevo': 'huevos',
+    'pasta (espaguetis o la que prefieras)': 'pasta',
+    'espaguetis': 'pasta',
+    'tomate cherry': 'tomate cherry',
+    'tomates cherry': 'tomate cherry',
+    'vinagre de modena o de jerez': 'vinagre de jerez',
+    'lomo con pimientos': 'lomo con pimientos',
+  },
+
+  // Cómo se muestra cada canónico (con tildes y mayúscula)
+  CANON_LABEL: {
+    'ajo': 'Ajo',
+    'aceite de oliva': 'Aceite de oliva',
+    'pimiento rojo': 'Pimiento rojo',
+    'pimiento verde': 'Pimiento verde',
+    'tomate maduro': 'Tomate maduro',
+    'perejil': 'Perejil',
+    'setas': 'Setas',
+    'arroz blanco': 'Arroz blanco',
+    'salmon': 'Salmón',
+    'lomo de cerdo': 'Lomo de cerdo',
+    'merluza': 'Merluza',
+    'lenguado': 'Lenguado',
+    'gambas': 'Gambas',
+    'mejillones': 'Mejillones',
+    'queso parmesano': 'Queso parmesano',
+    'atun en lata': 'Atún en lata',
+    'pollo': 'Pollo',
+    'pechuga de pollo': 'Pechuga de pollo',
+    'yogur': 'Yogur',
+    'huevos': 'Huevos',
+    'pasta': 'Pasta',
+    'tomate cherry': 'Tomate cherry',
+    'vinagre de jerez': 'Vinagre de Jerez',
+    'lomo con pimientos': 'Lomo con pimientos',
+  },
+
+  // Nombre canónico de un ingrediente (para agrupar y para los precios)
+  _canon(nombre) {
+    const n = this._norm(nombre);
+    return this.ALIAS_ING[n] || n;
+  },
+
   _unidad(u) {
     return ({
       'g': 'g', 'ml': 'ml', 'kg': 'kg', 'l': 'l',
@@ -101,6 +176,24 @@ const Shopping = {
 
   _precio(n) {
     return `${this._fmt(n)} €`;
+  },
+
+  // "de Tortilla de verduras" / "de 2 platos"
+  _de(item) {
+    const nombres = (item.origen || []).map(o => o.receta);
+    if (nombres.length === 0) return '';
+    if (nombres.length === 1) return `de ${nombres[0]}`;
+    return `de ${nombres.length} platos`;
+  },
+
+  // "mié · Tortilla de verduras"
+  _donde(item) {
+    const dias = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
+    const o = (item.origen || [])[0];
+    if (!o) return '';
+    const d = dias[Store.getDaysOrder().indexOf(o.dia)];
+    const c = o.meal === 'lunch' ? 'almuerzo' : 'cena';
+    return `${d} ${c}`;
   },
 
   _categoria(nombre, producto) {
@@ -149,7 +242,7 @@ const Shopping = {
   },
 
   findProducto(ingrediente, nombreProducto) {
-    const ing = this._norm(ingrediente);
+    const ing = this._norm(this._canon(ingrediente));
     const nom = this._norm(nombreProducto);
     return this._data.productos.find(p =>
       this._norm(p.ingrediente) === ing && this._norm(p.nombre) === nom
@@ -157,7 +250,7 @@ const Shopping = {
   },
 
   getProductosDe(ingrediente) {
-    const ing = this._norm(ingrediente);
+    const ing = this._norm(this._canon(ingrediente));
     return this._data.productos.filter(p => this._norm(p.ingrediente) === ing);
   },
 
@@ -166,7 +259,7 @@ const Shopping = {
     if (!p) {
       p = {
         id: Store.uuid(),
-        ingrediente: ingrediente.trim(),
+        ingrediente: this._canon(ingrediente),
         nombre: nombre.trim(),
         marca: marca.trim(),
         tamano: tamano.trim(),
@@ -243,20 +336,27 @@ const Shopping = {
         const receta = Recipes.getById(week[day]?.[meal]);
         if (!receta) return;
         (receta.ingredientes || []).forEach(ing => {
-          const key = this._norm(ing.nombre);
+          const canon = this._canon(ing.nombre);
+          const key = this._norm(canon);
           if (!key) return;
           if (!acc.has(key)) {
             acc.set(key, {
               key,
-              nombre: ing.nombre,
+              nombre: this.CANON_LABEL[key] || ing.nombre,
               cantidades: {},   // { unidad: cantidad }
               texto: [],        // cantidades no numéricas ("al gusto")
               condimento: false,
+              origen: [],       // de qué platos sale este ingrediente
             });
           }
           const item = acc.get(key);
           const unidad = this._unidad(ing.unidad);
           const n = this._num(ing.cantidad);
+
+          // de qué plato viene (para que la lista no parezca arbitraria)
+          if (!item.origen.some(o => o.receta === receta.nombre)) {
+            item.origen.push({ receta: receta.nombre, dia: day, meal });
+          }
 
           if (n === null) {
             // "al gusto" = condimento (no se compra). "un puñado" = cantidad real.
