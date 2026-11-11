@@ -241,6 +241,22 @@ Edita las variables CSS en `css/styles.css`:
 
 Edita `js/translations.js` para cambiar idioma o textos.
 
+## Plan de preparación
+
+Botón **🍳 Plan de preparación** (debajo de *Ver lista de la compra*): te dice
+**qué día de la semana cocinar cada elaboración** de la semana.
+
+- Estima cuántos días aguanta cada receta (pescado y ensaladas el mismo día,
+  legumbres 4 días, guisos 3, arroz/pasta 3, tortilla y carne 2).
+- Agrupa las elaboraciones en **sesiones de cocina** para cocinar menos días:
+  lo que aguanta se cocina por adelantado y se calienta.
+- Avisa cuando dos platos comparten un ingrediente base (pollo, arroz,
+  legumbre…): *una sola compra y lo aprovechás*.
+- Marca cada sesión como hecha, 📋 copiar el plan y sugerencia el día de compra.
+
+> Todo es heurístico (no hay tiempo de cocción ni fecha de caducidad en las
+> recetas): la app afina sola con el nombre, los tags y los ingredientes.
+
 ## License
 
 MIT — Para uso personal de David & María.

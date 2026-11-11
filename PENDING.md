@@ -1,4 +1,30 @@
-# PENDING — Sesión del 2026-11-10 (v42)
+# PENDING — Sesión del 2026-11-10 (v44)
+
+## Plan de preparación (v44)
+
+Botón **🍳 Plan de preparación** debajo de **🛒 Ver lista de la compra**
+(también en el menú ☰). Dice **qué día cocinar cada elaboración** de la
+semana, tomando en cuenta el día en que hay que comerla y buscando la
+máxima productividad.
+
+- `js/prep.js` (nuevo): módulo `Prep`.
+  - **Conserva**: días que aguanta cada receta, deducida del nombre, los tags
+    y los ingredientes (pescado/ensaladas 0, legumbres 4, guisos 3, arroz/pasta
+    3, tortilla/carne 2).
+  - **Ventana**: cada plato se puede cocinar entre (día que se come − conserva)
+    y (día que se come). Nunca después de comerlo ni antes de que se pudra.
+  - **Sesiones**: las elaboraciones que aguantan se cocinan por adelantado y se
+    agrupan en el mismo día (menos sesiones = más productividad); las que
+    comparten un ingrediente base (pollo, arroz, legumbre…) se cocinan juntas
+    y la app avisa "una sola compra y lo aprovechás".
+  - Máximo 3 platos por sesión, y nunca más de 2 días de adelanto.
+  - Checklist "hecho" por semana (`menuapp_prep_done`, local como el de la
+    lista de la compra) + 📋 copiar el plan + día de compra sugerido.
+- `tests/prep.test.js`: 31 tests (jsdom), incluyen un smoke del render.
+
+Bug cazado validando contra las recetas reales de Supabase: `consumo.push({
+dia, ...})` usaba una variable inexistente (`day`) que en los tests tapaba
+una helper del propio test → el plan salía con datos basura.
 
 ## Lista de la compra con precios manuales (v42)
 

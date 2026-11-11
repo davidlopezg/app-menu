@@ -92,7 +92,8 @@ const T = {
     shoppingListTitle: 'Lista de la Compra',
     shoppingListEmpty: 'No hay recetas asignadas esta semana',
     copyList: 'Copiar lista',
-    listCopied: '¡Lista copiada!'
+    listCopied: '¡Lista copiada!',
+    prepPlan: 'Plan de preparación'
   },
 
   // Validation

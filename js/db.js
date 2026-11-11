@@ -534,6 +534,7 @@ const DB = {
       if (App.currentView === 'menu')    App.renderMenuView();
       else if (App.currentView === 'recipes') App.renderRecipesView();
       else if (App.currentView === 'template') App.renderTemplateView();
+      else if (App.currentView === 'prep') App.renderPrepView();
     }
   },
 

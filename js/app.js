@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v43 (2026-11-10)',
+  VERSION: 'v44 (2026-11-10)',
 
   // ============================================
   // Initialize
@@ -20,6 +20,7 @@ const App = {
     Menu.init();
     if (typeof Templates !== 'undefined') Templates.init();
     if (typeof Shopping !== 'undefined') Shopping.init();
+    if (typeof Prep !== 'undefined') Prep.init();
     if (typeof AI !== 'undefined') AI.init();
 
     this._setupEventListeners();
@@ -133,6 +134,9 @@ const App = {
       case 'shopping':
         this.renderShoppingView();
         break;
+      case 'prep':
+        this.renderPrepView();
+        break;
       case 'recipe':
         const id = parts[1];
         if (id === 'new') {
@@ -159,6 +163,9 @@ const App = {
         break;
       case 'shopping':
         window.location.hash = 'shopping';
+        break;
+      case 'prep':
+        window.location.hash = 'prep';
         break;
       case 'recipe':
         if (params.id) {
@@ -249,6 +256,15 @@ const App = {
       html += `
         <button class="btn btn--secondary btn--full" style="margin-top: 8px;" onclick="App.navigate('shopping')">
           🛒 Ver lista de la compra${nItems ? ` (${nItems})` : ''}
+        </button>`;
+    }
+
+    // Plan de preparación (qué día cocinar cada cosa)
+    if (typeof Prep !== 'undefined') {
+      const plan = Prep.buildPlan();
+      html += `
+        <button class="btn btn--secondary btn--full" style="margin-top: 8px;" onclick="App.navigate('prep')">
+          🍳 Plan de preparación${plan.sesiones.length ? ` (${plan.sesiones.length} sesiones)` : ''}
         </button>`;
     }
 
@@ -908,6 +924,9 @@ const App = {
         <button class="btn btn--secondary btn--full" onclick="App.showShoppingList(); Components.modal.close();">
           🛒 ${T.menu.shoppingList}
         </button>
+        <button class="btn btn--secondary btn--full" onclick="Components.modal.close(); App.navigate('prep');">
+          🍳 ${T.menu.prepPlan}
+        </button>
         <button class="btn btn--secondary btn--full" onclick="Components.modal.close(); App.navigate('template', {});">
           ${tplLabel}
         </button>
@@ -1042,8 +1061,12 @@ const App = {
 
   copyShoppingList() {
     const items = Shopping.buildList();
-    const text = Shopping.textoLista(items);
-    const done = () => Components.toast.show('📋 Lista copiada');
+    this._copyText(Shopping.textoLista(items), '📋 Lista copiada');
+  },
+
+  // Copia un texto al portapapeles (con fallback para navegadores viejos)
+  _copyText(text, okMsg = '📋 Copiado') {
+    const done = () => Components.toast.show(okMsg);
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text).then(done).catch(() => fallback());
     } else {
@@ -1244,6 +1267,122 @@ const App = {
       </p>
       ${html || '<p>No hay nada en la lista.</p>'}
     `);
+  },
+
+  // ============================================
+  // View: Plan de preparación
+  // ============================================
+  renderPrepView() {
+    this.currentView = 'prep';
+    this._updateNav(null);
+    this._updateHeader('🍳 Plan de preparación', true);
+    this._updateHeaderTitle('🍳 Plan de preparación');
+
+    const main = document.getElementById('main-content');
+    const wk = Menu.getWeekKey();
+    const plan = Prep.buildPlan(wk);
+
+    if (!plan.sesiones.length) {
+      main.innerHTML = `
+        <div class="signin-view" style="padding: 24px 16px;">
+          <div class="signin-card">
+            <div class="signin-card__icon">🍳</div>
+            <h2 class="signin-card__title">No hay nada que preparar</h2>
+            <p class="signin-card__hint">Asigná recetas al menú y te digo qué día cocinar cada cosa.</p>
+            <button class="btn btn--primary btn--full" onclick="App.navigate('menu')">
+              ← Ir al menú
+            </button>
+          </div>
+          ${this._renderFooter()}
+        </div>`;
+      return;
+    }
+
+    const h = (min) => (min >= 60
+      ? `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min`
+      : `${min} min`);
+
+    let html = `
+      <div class="week-nav">
+        <button class="week-nav__btn" onclick="App.prevWeek()" aria-label="Semana anterior">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6"/>
+          </svg>
+        </button>
+        <span class="week-nav__label">${Menu.getWeekLabel()}</span>
+        <button class="week-nav__btn" onclick="App.nextWeek()" aria-label="Semana siguiente">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="card prep-summary">
+        <div class="prep-summary__row">
+          <span>🍳 <strong>${plan.sesiones.length}</strong> ${plan.sesiones.length === 1 ? 'sesión' : 'sesiones'}</span>
+          <span>🥘 <strong>${plan.nPlatos}</strong> platos</span>
+          <span>⏱️ <strong>~${h(plan.minutosTotal)}</strong></span>
+        </div>
+        ${plan.diasLibres.length ? `
+        <div class="prep-summary__row prep-summary__row--muted">
+          😌 Descansás: ${plan.diasLibres.map(d => Prep.DIAS[d]).join(', ')}
+        </div>` : ''}
+        ${plan.diaCompra !== null ? `
+        <div class="prep-summary__row prep-summary__row--muted">
+          🛒 Comprá el ${Prep._nombreDia(plan.diaCompra)}, antes de la primera sesión
+        </div>` : ''}
+        <div class="prep-summary__actions">
+          <button class="btn btn--outline btn--sm" onclick="App.copyPrepPlan()">📋 Copiar</button>
+          <button class="btn btn--outline btn--sm" onclick="App.navigate('shopping')">🛒 Lista de la compra</button>
+        </div>
+      </div>
+    `;
+
+    for (const s of plan.sesiones) {
+      const hecho = Prep.estaHecho(s.dia, wk);
+      html += `
+        <div class="prep-day ${hecho ? 'prep-day--done' : ''}">
+          <div class="prep-day__head">
+            <button class="prep-day__check" onclick="App.togglePrepDay(${s.dia})" aria-label="Marcar hecho">
+              ${hecho ? '✅' : '○'}
+            </button>
+            <div class="prep-day__headtext">
+              <div class="prep-day__title">${Prep.DIAS_LARGO[s.dia]} ${s.fecha}</div>
+              <div class="prep-day__meta">
+                ${s.platos.length} ${s.platos.length === 1 ? 'plato' : 'platos'} · ~${h(s.minutos)}
+              </div>
+            </div>
+          </div>
+          <ul class="prep-items">
+            ${s.platos.map(p => `
+              <li class="prep-item">
+                <div class="prep-item__name">${Components.escapeHtml(p.nombre)}</div>
+                <div class="prep-item__when">→ ${Components.escapeHtml(Prep._consumoTexto(p))}</div>
+                <div class="prep-item__why">${Components.escapeHtml(p.motivo)}</div>
+                ${p.ultimoDia - p.primerDia > p.conserva ? `
+                <div class="prep-item__warn">
+                  ⚠️ Para el ${Prep.DIAS[p.ultimoDia]} no da (aguanta ${p.conserva} días): hay que hacerlo de nuevo
+                </div>` : ''}
+              </li>`).join('')}
+          </ul>
+          ${s.compartidas.length ? `
+          <div class="prep-day__batch">
+            🔁 ${s.compartidas.map(k => Prep.labelClave(k)).join(' / ')} en los ${s.platos.length} platos: una sola compra y lo aprovechás
+          </div>` : ''}
+        </div>`;
+    }
+
+    html += this._renderFooter();
+    main.innerHTML = html;
+  },
+
+  togglePrepDay(dia) {
+    Prep.toggleHecho(dia);
+    this.renderPrepView();
+  },
+
+  copyPrepPlan() {
+    this._copyText(Prep.textoPlan(Prep.buildPlan()), '📋 Plan copiado');
   },
 
   // ============================================
