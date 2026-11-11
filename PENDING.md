@@ -1,6 +1,15 @@
-# PENDING — Sesión del 2026-11-10 (v45)
+# PENDING — Sesión del 2026-11-10 (v46)
 
 ## Plan de preparación (v44 → v45)
+
+### v46: el día usa el mismo formato que las categorías de la lista
+
+- La cabecera del día ahora es una línea de texto **en mayúsculas + contadores
+  apagados**, igual que `.shop-cat__header` de la lista de la compra
+  ("LUNES 9 NOV · 2 PLATOS · ~1H02 · 0/2 LISTOS").
+- Los platos van en la misma tarjeta blanca que los productos de la lista
+  (`.shop-items`/`.shop-item`), con el check a la izquierda.
+- El aviso de trabajo compartido (🔁) es una fila al final de la tarjeta.
 
 ### v45: el check es por elaboración y el día se distingue
 

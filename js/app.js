@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v45 (2026-11-10)',
+  VERSION: 'v46 (2026-11-10)',
 
   // ============================================
   // Initialize
@@ -1344,13 +1344,9 @@ const App = {
       html += `
         <div class="prep-day ${completa ? 'prep-day--done' : ''}">
           <div class="prep-day__head">
-            <div class="prep-day__headtext">
-              <div class="prep-day__title">${Prep.DIAS_LARGO[s.dia]} ${s.fecha}</div>
-              <div class="prep-day__meta">
-                ${s.platos.length} ${s.platos.length === 1 ? 'plato' : 'platos'} · ~${h(s.minutos)}
-              </div>
-            </div>
-            <div class="prep-day__progress">${listos}/${s.platos.length}</div>
+            <span class="prep-day__title">${Prep.DIAS_LARGO[s.dia]} ${s.fecha}</span>
+            <span class="prep-day__count">${s.platos.length} ${s.platos.length === 1 ? 'plato' : 'platos'} · ~${h(s.minutos)}</span>
+            <span class="prep-day__count">${listos}/${s.platos.length} listos</span>
           </div>
           <ul class="prep-items">
             ${s.platos.map(p => `
@@ -1367,11 +1363,11 @@ const App = {
                   </div>` : ''}
                 </div>
               </li>`).join('')}
+            ${s.compartidas.length ? `
+            <li class="prep-batch">
+              🔁 ${s.compartidas.map(k => Prep.labelClave(k)).join(' / ')} en los ${s.platos.length} platos: una sola compra y lo aprovechás
+            </li>` : ''}
           </ul>
-          ${s.compartidas.length ? `
-          <div class="prep-day__batch">
-            🔁 ${s.compartidas.map(k => Prep.labelClave(k)).join(' / ')} en los ${s.platos.length} platos: una sola compra y lo aprovechás
-          </div>` : ''}
         </div>`;
     }
 

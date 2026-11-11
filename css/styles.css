@@ -2019,89 +2019,42 @@ select.form-input {
 /* ============================================
    Plan de preparación
    ============================================ */
-.prep-summary {
-  margin-bottom: var(--space-md);
-}
-
-.prep-summary__row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-md);
-  font-size: var(--font-size-sm);
-  margin-bottom: var(--space-xs);
-}
-
-.prep-summary__row--muted {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-}
-
-.prep-summary__actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: var(--space-sm);
-}
-
+/* Mismo formato que las categorías de la lista de la compra:
+   título en mayúsculas + contadores apagados. */
 .prep-day {
-  background: var(--color-surface);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-  padding: 0 var(--space-md) var(--space-sm);
-  margin-bottom: var(--space-sm);
-  overflow: hidden;
+  margin-bottom: var(--space-md);
 }
 
 .prep-day--done {
   opacity: 0.65;
 }
 
-/* El día va en una banda de color, bien distinto de las elaboraciones */
 .prep-day__head {
   display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin: 0 calc(var(--space-md) * -1);
-  padding: var(--space-sm) var(--space-md);
-  background: rgba(45, 106, 79, 0.1);
-  border-left: 4px solid var(--color-primary);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.prep-day__headtext {
-  flex: 1;
-  min-width: 0;
-}
-
-.prep-day__title {
-  font-weight: 700;
-  font-size: var(--font-size-md);
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-primary);
+  padding: 0 var(--space-xs) var(--space-xs);
   text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--color-primary-dark);
-  line-height: 1.2;
+  letter-spacing: 0.3px;
 }
 
-.prep-day__meta {
-  font-size: var(--font-size-xs);
+.prep-day__count {
   color: var(--color-text-muted);
-  margin-top: 2px;
-}
-
-.prep-day__progress {
-  flex-shrink: 0;
-  font-size: var(--font-size-xs);
-  font-weight: 700;
-  color: var(--color-primary-dark);
-  background: rgba(255, 255, 255, 0.75);
-  border-radius: 999px;
-  padding: 2px 10px;
+  font-weight: 400;
 }
 
 .prep-items {
   list-style: none;
   margin: 0;
   padding: 0;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 /* Cada elaboración con su propio check */
@@ -2109,7 +2062,7 @@ select.form-input {
   display: flex;
   align-items: flex-start;
   gap: var(--space-sm);
-  padding: var(--space-sm) 0;
+  padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -2161,11 +2114,9 @@ select.form-input {
   margin-top: 4px;
 }
 
-.prep-day__batch {
-  margin-top: var(--space-xs);
-  padding: 6px 8px;
+.prep-batch {
+  padding: var(--space-sm) var(--space-md);
   background: rgba(149, 213, 178, 0.25);
-  border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
   color: var(--color-primary-dark);
 }

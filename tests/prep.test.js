@@ -219,12 +219,12 @@ App.renderPrepView();
 const html = document.getElementById('main-content').innerHTML;
 check('la vista de preparación se renderiza', html.includes('prep-summary') && html.includes('prep-day'));
 check('la vista lista las sesiones con su día', html.includes('Lunes') && html.includes('platos'));
-check('la vista avisa del trabajo compartido', html.includes('pollo en los 2 platos'), html.match(/prep-day__batch[^<]*/)?.[0]);
+check('la vista avisa del trabajo compartido', html.includes('pollo en los 2 platos'), html.match(/prep-batch[^<]*/)?.[0]);
 check('el check está en cada elaboración, no en el día',
   html.includes('App.togglePrepPlato') && !html.includes('App.togglePrepDay'),
   `${html.includes('App.togglePrepPlato')} / ${html.includes('App.togglePrepDay')}`);
-check('el día se ve distinto (banda con título en mayúsculas)',
-  html.includes('prep-day__progress') && html.includes('prep-item__check'));
+check('el día usa el mismo formato que las categorías de la lista',
+  html.includes('prep-day__head') && html.includes('prep-day__count') && !html.includes('prep-day__progress'));
 
 App.renderMenuView();
 const menuHtml = document.getElementById('main-content').innerHTML;
