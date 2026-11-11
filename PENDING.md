@@ -1,3 +1,28 @@
+# PENDING — Sesión del 2026-11-10 (v41)
+
+**Estado:** ✅ Resuelto y verificado contra Supabase real.
+
+## Último: drag & drop + plantilla cargada (v41)
+
+- `js/dragdrop.js`: arrastre con Pointer Events. Mouse: arrastrar directo.
+  Dedo: long press 250 ms (vibra) + arrastrar, con listener `touchmove`
+  no-pasivo para que la página no scrollee durante el arrastre.
+  Soltar en celda vacía → mueve; en celda ocupada → intercambia.
+  Un toque corto sigue siendo un toque (abre el menú de opciones).
+- `js/components.js`: `data-day` en cada celda + asa ⠿.
+- `js/app.js`: `_moveMealInWeek` / `_moveMealInTemplate` + cartelito de ayuda.
+- `css/styles.css`: fantasma, celda origen/destino, estado "armado".
+- `scripts/sb.mjs`: `apply-template <week_key>` y `backup <week_key>`.
+- 16 tests en `tests/` (jsdom) que cargan el código real de la app.
+
+Bugs que cazaron los tests: el `this` de los listeners de puntero y una clave
+equivocada en el swap de la plantilla.
+
+Estado en la nube: `2026-W40` cargada con la plantilla "Semana tipo"
+(backup del menú anterior en `data/backup-2026-W40.json`).
+
+---
+
 # PENDING — Sesión del 2026-11-10 (v39)
 
 **Estado:** ✅ Resuelto y verificado contra Supabase real.
