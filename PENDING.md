@@ -1,4 +1,25 @@
-# PENDING — Sesión del 2026-11-10 (v41)
+# PENDING — Sesión del 2026-11-10 (v42)
+
+## Lista de la compra con precios manuales (v42)
+
+- `js/shopping.js`: agrega los ingredientes de la semana, **normaliza unidades**
+  ("300 g" + "200 g" → "500 g"; "500 g + 2 ud" no se mezclan), saca los
+  condimentos ("al gusto"), categoriza (verduras/carnicería/pescado/lácteos/
+  despensa/panadería/congelados), y mantiene el libro de precios
+  (tiendas + productos + precios).
+- Vista `#shopping`: resumen (productos, tiendas, total estimado, sin precio),
+  lista por categoría, "ya lo tengo" por semana, 🏷️ modal de precio,
+  🏪 gestión de tiendas, 🗺️ reparto por tienda y 📋 copiar (con precios y
+  dónde comprar).
+- **Los precios son manuales**: el producto se identifica por el nombre que
+  escribís (mismo nombre en dos tiendas → misma comparación).
+- Sync: todo el libro en **una fila de `menu_weeks` (clave `shopping:data`)**,
+  sin crear tablas en Supabase. `pullAll` filtra las keys que no son
+  `YYYY-WXX` para que esa fila no aparezca como una semana.
+- `tests/shopping.test.js`: 22 tests (jsdom).
+
+Bug cazado por los tests: los condimentos con cantidad "al gusto" se colaban en
+la lista de la compra (y "un puñado" de perejil se perdía).
 
 ## Nutri: completeness check de las recetas de la plantilla
 
