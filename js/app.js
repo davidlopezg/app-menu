@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v41 (2026-11-10)',
+  VERSION: 'v42 (2026-11-10)',
 
   // ============================================
   // Initialize
@@ -19,6 +19,7 @@ const App = {
     Recipes.init();
     Menu.init();
     if (typeof Templates !== 'undefined') Templates.init();
+    if (typeof Shopping !== 'undefined') Shopping.init();
     if (typeof AI !== 'undefined') AI.init();
 
     this._setupEventListeners();
@@ -129,6 +130,9 @@ const App = {
       case 'template':
         this.renderTemplateView();
         break;
+      case 'shopping':
+        this.renderShoppingView();
+        break;
       case 'recipe':
         const id = parts[1];
         if (id === 'new') {
@@ -152,6 +156,9 @@ const App = {
         break;
       case 'template':
         window.location.hash = 'template';
+        break;
+      case 'shopping':
+        window.location.hash = 'shopping';
         break;
       case 'recipe':
         if (params.id) {
@@ -235,6 +242,15 @@ const App = {
 
     // Acciones de plantilla (guardar / aplicar / duplicar)
     html += this._renderTemplateActions();
+
+    // Acceso rápido a la lista de la compra
+    if (typeof Shopping !== 'undefined') {
+      const nItems = Shopping.buildList().length;
+      html += `
+        <button class="btn btn--secondary btn--full" style="margin-top: 8px;" onclick="App.navigate('shopping')">
+          🛒 Ver lista de la compra${nItems ? ` (${nItems})` : ''}
+        </button>`;
+    }
 
     html += this._renderFooter();
 
@@ -909,11 +925,323 @@ const App = {
   },
 
   showShoppingList() {
-    const ingredients = Menu.getShoppingList();
-    Components.modal.open(
-      T.menu.shoppingListTitle,
-      Components.renderShoppingList(ingredients)
-    );
+    this.navigate('shopping', {});
+  },
+
+  // ============================================
+  // View: Lista de la compra (con precios)
+  // ============================================
+  renderShoppingView() {
+    this.currentView = 'shopping';
+    this._updateNav(null);
+    this._updateHeader('🛒 Lista de la compra', true);
+
+    const main = document.getElementById('main-content');
+    const items = Shopping.buildList();
+    const wk = Menu.getWeekKey();
+
+    if (items.length === 0) {
+      main.innerHTML = `
+        <div class="signin-view" style="padding: 24px 16px;">
+          <div class="signin-card">
+            <div class="signin-card__icon">🛒</div>
+            <h2 class="signin-card__title">No hay recetas esta semana</h2>
+            <p class="signin-card__hint">Asigná recetas al menú y la lista se arma sola.</p>
+            <button class="btn btn--primary btn--full" onclick="App.navigate('menu')">
+              ← Ir al menú
+            </button>
+          </div>
+          ${this._renderFooter()}
+        </div>`;
+      return;
+    }
+
+    const total = Shopping.totalEstimado(items);
+    const sinPrecio = Shopping.sinPrecio(items);
+    const faltan = items.filter(i => i.comprado).length;
+
+    // agrupar por categoría
+    const porCat = new Map();
+    for (const it of items) {
+      if (!porCat.has(it.categoria)) porCat.set(it.categoria, []);
+      porCat.get(it.categoria).push(it);
+    }
+    const catInfo = c => Shopping.CATEGORIAS.find(x => x.key === c) || { label: 'Otros', icon: '📦' };
+
+    let html = `
+      <div class="week-nav">
+        <button class="week-nav__btn" onclick="App.prevWeek()" aria-label="Semana anterior">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6"/>
+          </svg>
+        </button>
+        <span class="week-nav__label">${Menu.getWeekLabel()}</span>
+        <button class="week-nav__btn" onclick="App.nextWeek()" aria-label="Semana siguiente">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="card shop-summary">
+        <div class="shop-summary__row">
+          <span>🛒 <strong>${items.length}</strong> productos</span>
+          <span>🏪 <strong>${new Set(items.filter(i => i.tienda).map(i => i.tienda.id)).size}</strong> tiendas</span>
+          <span>💶 <strong>${Shopping._precio(total)}</strong> estimado</span>
+        </div>
+        <div class="shop-summary__row shop-summary__row--muted">
+          ${sinPrecio.length ? `⚠️ ${sinPrecio.length} sin precio` : '✅ Todos los precios cargados'}
+          ${faltan ? ` · ✅ ${faltan} ya comprados` : ''}
+        </div>
+        <div class="shop-summary__actions">
+          <button class="btn btn--outline btn--sm" onclick="App.copyShoppingList()">📋 Copiar</button>
+          <button class="btn btn--outline btn--sm" onclick="App.showStoresModal()">🏪 Tiendas</button>
+          <button class="btn btn--outline btn--sm" onclick="App.showStoresByShop()">🗺️ Dónde comprar</button>
+        </div>
+      </div>
+    `;
+
+    for (const [cat, lista] of porCat) {
+      const info = catInfo(cat);
+      html += `
+        <div class="shop-cat">
+          <div class="shop-cat__header">${info.icon} ${info.label} <span class="shop-cat__count">${lista.length}</span></div>
+          <ul class="shop-items">
+      `;
+      for (const it of lista) {
+        html += `
+          <li class="shop-item ${it.comprado ? 'shop-item--done' : ''}">
+            <button class="shop-item__check" onclick="App.toggleBought('${Components.escapeHtml(it.key)}')"
+                    aria-label="Marcar comprado">${it.comprado ? '✅' : '○'}</button>
+            <div class="shop-item__body">
+              <div class="shop-item__name">${Components.escapeHtml(it.nombre)}</div>
+              <div class="shop-item__meta">
+                <span class="shop-item__qty">${Components.escapeHtml(it.cantidad)}</span>
+                ${it.precio !== null
+                  ? `<span class="shop-item__price">${Shopping._precio(it.precio)}</span>
+                     <span class="shop-item__shop">${Components.escapeHtml(it.tienda.nombre)}</span>`
+                  : ''}
+              </div>
+            </div>
+            <button class="shop-item__tag" onclick="App.openPriceModal('${Components.escapeHtml(it.key)}')"
+                    aria-label="Poner precio">🏷️</button>
+          </li>`;
+      }
+      html += '</ul></div>';
+    }
+
+    html += this._renderFooter();
+    main.innerHTML = html;
+  },
+
+  toggleBought(key) {
+    Shopping.toggleComprado(key);
+    this.renderShoppingView();
+  },
+
+  copyShoppingList() {
+    const items = Shopping.buildList();
+    const text = Shopping.textoLista(items);
+    const done = () => Components.toast.show('📋 Lista copiada');
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(done).catch(() => fallback());
+    } else {
+      fallback();
+    }
+    function fallback() {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      done();
+    }
+  },
+
+  // Modal: poner el precio de un producto en una tienda
+  openPriceModal(key) {
+    const items = Shopping.buildList();
+    const item = items.find(i => i.key === key);
+    if (!item) return;
+
+    const tiendas = Shopping.getTiendas();
+    const productos = Shopping.getProductosDe(item.nombre);
+    const prod = productos[0] || null;
+    const precios = prod ? Shopping.getPreciosDe(prod.id) : [];
+
+    const listaPrecios = precios.length ? `
+      <div class="shop-prices">
+        <h4>Precios que ya tenés</h4>
+        ${precios.map(p => `
+          <div class="shop-prices__row">
+            <span>${Components.escapeHtml(p.tienda.nombre)}</span>
+            <b>${Shopping._precio(p.precio)}</b>
+            <button class="btn btn--ghost btn--xs" onclick="App.removePrice('${prod.id}','${p.tiendaId}')">✕</button>
+          </div>`).join('')}
+      </div>` : '';
+
+    Components.modal.open(`🏷️ ${item.nombre}`, `
+      <p style="color: var(--color-text-muted); font-size: 13px; margin-bottom: 12px;">
+        Cantidad en la lista: <strong>${Components.escapeHtml(item.cantidad)}</strong>
+      </p>
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Tienda</label>
+      <select id="sp-tienda" class="form-input" style="margin-bottom: 12px;">
+        ${tiendas.map(t => `<option value="${t.id}">${Components.escapeHtml(t.nombre)}</option>`).join('')}
+      </select>
+      <button class="btn btn--outline btn--sm" style="margin-bottom: 12px;" onclick="App.addStoreFromPriceModal()">
+        ➕ Nueva tienda
+      </button>
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Producto (escribí lo mismo en cada tienda para comparar)</label>
+      <input type="text" id="sp-producto" class="form-input"
+             value="${Components.escapeHtml(prod?.nombre || item.nombre)}" style="margin-bottom: 12px;">
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Precio (€)</label>
+      <input type="number" id="sp-precio" class="form-input" step="0.01" min="0"
+             inputmode="decimal" placeholder="0,00" style="margin-bottom: 16px;">
+
+      ${listaPrecios}
+
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn--primary" style="flex: 1;" onclick="App.savePrice('${Components.escapeHtml(key)}')">Guardar</button>
+        <button class="btn btn--ghost" onclick="Components.modal.close()">Cancelar</button>
+      </div>
+    `);
+  },
+
+  savePrice(key) {
+    const items = Shopping.buildList();
+    const item = items.find(i => i.key === key);
+    const tiendaId = document.getElementById('sp-tienda')?.value;
+    const nombre = document.getElementById('sp-producto')?.value.trim();
+    const precio = document.getElementById('sp-precio')?.value;
+
+    if (!item || !tiendaId || !nombre || !precio) {
+      Components.toast.show('⚠️ Completá tienda, producto y precio');
+      return;
+    }
+
+    const producto = Shopping.ensureProducto({ ingrediente: item.nombre, nombre });
+    Shopping.setPrecio(producto.id, tiendaId, precio);
+    Components.modal.close();
+    Components.toast.show(`✅ ${Shopping._precio(precio)} en ${Shopping.getTienda(tiendaId).nombre}`);
+    this.renderShoppingView();
+  },
+
+  removePrice(productoId, tiendaId) {
+    Shopping.removePrecio(productoId, tiendaId);
+    Components.modal.close();
+    this.renderShoppingView();
+  },
+
+  // Modal: gestionar tiendas
+  showStoresModal() {
+    const tiendas = Shopping.getTiendas();
+    const rows = tiendas.map(t => {
+      const n = Shopping._data.precios.filter(p => p.tiendaId === t.id).length;
+      return `
+        <div class="shop-prices__row">
+          <span>${Components.escapeHtml(t.nombre)} <span style="opacity:.6">(${n} precios)</span></span>
+          <button class="btn btn--ghost btn--xs" onclick="App.removeStore('${t.id}')">✕</button>
+        </div>`;
+    }).join('');
+
+    Components.modal.open('🏪 Tiendas', `
+      <div class="shop-prices">
+        <h4>Tus tiendas</h4>
+        ${rows || '<p style="color:var(--color-text-muted)">No hay tiendas</p>'}
+      </div>
+      <hr style="border:none;border-top:1px solid var(--color-border);margin:16px 0;">
+      <label style="font-size: 13px; color: var(--color-text-muted);">Nombre de la tienda</label>
+      <input type="text" id="st-nombre" class="form-input" placeholder="Ej: Frutería de Ana" style="margin-bottom: 12px;">
+      <label style="font-size: 13px; color: var(--color-text-muted);">Tipo</label>
+      <select id="st-tipo" class="form-input" style="margin-bottom: 16px;">
+        <option value="supermercado">Supermercado</option>
+        <option value="mercado">Mercado</option>
+        <option value="fruteria">Frutería / verdulería</option>
+        <option value="carniceria">Carnicería</option>
+        <option value="pescaderia">Pescadería</option>
+        <option value="online">Online</option>
+      </select>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn--primary" style="flex:1;" onclick="App.addStore()">Agregar</button>
+        <button class="btn btn--ghost" onclick="Components.modal.close()">Cerrar</button>
+      </div>
+    `);
+  },
+
+  addStore() {
+    const nombre = document.getElementById('st-nombre')?.value.trim();
+    const tipo = document.getElementById('st-tipo')?.value || 'supermercado';
+    if (!nombre) { Components.toast.show('⚠️ Escribí el nombre'); return; }
+    Shopping.addTienda({ nombre, tipo });
+    Components.modal.close();
+    Components.toast.show(`✅ ${nombre} agregada`);
+    this.showStoresModal();
+  },
+
+  addStoreFromPriceModal() {
+    const nombre = prompt('Nombre de la tienda');
+    if (!nombre) return;
+    const t = Shopping.addTienda({ nombre });
+    Components.modal.close();
+    this.openPriceModalFor(t.id);
+  },
+
+  openPriceModalFor(tiendaId) {
+    const items = Shopping.buildList();
+    const item = items.find(i => i.precio === null) || items[0];
+    if (!item) return;
+    this.openPriceModal(item.key);
+    setTimeout(() => {
+      const sel = document.getElementById('sp-tienda');
+      if (sel) sel.value = tiendaId;
+    }, 50);
+  },
+
+  removeStore(id) {
+    const t = Shopping.getTienda(id);
+    if (!t) return;
+    if (!confirm(`¿Borrar "${t.nombre}" y sus precios?`)) return;
+    Shopping.removeTienda(id);
+    Components.modal.close();
+    this.renderShoppingView();
+  },
+
+  // Modal: reparto por tienda (dónde comprar)
+  showStoresByShop() {
+    const items = Shopping.buildList();
+    const grupos = Shopping.porTienda(items);
+    const total = Shopping.totalEstimado(items);
+
+    const html = grupos.map(g => {
+      const nombre = g.tienda ? g.tienda.nombre : 'Sin tienda (sin precio)';
+      const icon = g.tienda ? '🏪' : '❓';
+      return `
+        <div class="shop-group">
+          <div class="shop-group__header">${icon} ${Components.escapeHtml(nombre)}
+            <span class="shop-group__total">${Shopping._precio(g.total)}</span>
+          </div>
+          <ul class="shop-group__items">
+            ${g.items.map(it => `
+              <li>
+                <span>${Components.escapeHtml(it.nombre)}</span>
+                <span class="shop-group__price">${it.precio !== null ? Shopping._precio(it.precio) : '—'}</span>
+              </li>`).join('')}
+          </ul>
+          ${g.sinPrecio ? `<div class="shop-group__note">${g.sinPrecio} sin precio cargado</div>` : ''}
+        </div>`;
+    }).join('');
+
+    Components.modal.open('🗺️ Dónde comprar', `
+      <p style="color: var(--color-text-muted); font-size: 13px; margin-bottom: 12px;">
+        Total estimado: <strong>${Shopping._precio(total)}</strong>
+        ${Shopping.sinPrecio(items).length ? `(faltan ${Shopping.sinPrecio(items).length} precios)` : ''}
+      </p>
+      ${html || '<p>No hay nada en la lista.</p>'}
+    `);
   },
 
   // ============================================

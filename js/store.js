@@ -7,7 +7,9 @@ const Store = {
     RECIPES: 'menuapp_recipes',
     MENU: 'menuapp_menu',
     TEMPLATES: 'menuapp_templates',
-    SETTINGS: 'menuapp_settings'
+    SETTINGS: 'menuapp_settings',
+    SHOPPING: 'menuapp_shopping',        // libro de precios (tiendas/productos/precios)
+    SHOPPING_DONE: 'menuapp_shopping_done' // qué ya se compró (por semana)
   },
 
   // Get item from localStorage

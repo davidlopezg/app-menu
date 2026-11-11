@@ -26,7 +26,7 @@ const DB = {
   // pushRecipes fallaba 3 veces y pushMenu tenía éxito, el contador iba
   // a 0 en vez de mantener las 3 fallas reales. Ahora cada scope tiene el
   // suyo y el footer muestra la suma.
-  _pendingSyncErrors: { recipes: 0, menu: 0, templates: 0 },
+  _pendingSyncErrors: { recipes: 0, menu: 0, templates: 0, shopping: 0 },
   // Throttle del toast: máximo 1 cada 60s. Si hay ráfagas de errores
   // (ej: edita 5 recetas seguidas), no se muestran 5 toasts sino 1 + contador.
   _lastSyncErrorToast: 0,
@@ -36,7 +36,7 @@ const DB = {
   // Si alguna vez cambia la forma del objeto, solo se toca acá.
   getTotalPendingErrors() {
     const e = this._pendingSyncErrors || {};
-    return (e.recipes || 0) + (e.menu || 0) + (e.templates || 0);
+    return (e.recipes || 0) + (e.menu || 0) + (e.templates || 0) + (e.shopping || 0);
   },
 
   USER_KEY: 'menuapp_user',   // localStorage key de la "sesión" (email del usuario)
@@ -82,6 +82,7 @@ const DB = {
     Store.registerSyncHook(Store.KEYS.RECIPES,    (recipes)    => DB.pushRecipes(recipes));
     Store.registerSyncHook(Store.KEYS.MENU,       (menu)       => DB.pushMenu(menu));
     Store.registerSyncHook(Store.KEYS.TEMPLATES,  (templates)  => DB.pushTemplates(templates));
+    Store.registerSyncHook(Store.KEYS.SHOPPING,   (shopping)   => DB.pushShopping(shopping));
 
     return true;
   },
@@ -232,9 +233,12 @@ const DB = {
         const menu = {};
         const tplRows = [];
         weeks.forEach(w => {
-          if (typeof w.week_key === 'string' && w.week_key.startsWith(this.TEMPLATE_KEY_PREFIX)) {
+          const key = String(w.week_key || '');
+          if (key.startsWith(this.TEMPLATE_KEY_PREFIX)) {
             tplRows.push(w);
-          } else {
+          } else if (/^\d{4}-W\d{2}$/.test(key)) {
+            // solo las keys con formato de semana (YYYY-WXX) son semanas;
+            // las demás filas (shopping:data, etc.) no son menús.
             menu[w.week_key] = w.data;
           }
         });
@@ -263,6 +267,14 @@ const DB = {
           this._knownTplIds = new Set(mapped.map(t => t.id));
         }
       }
+
+      // Libro de precios de la lista de la compra (fila `shopping:data`)
+      if (weeks && weeks.length > 0 && typeof Shopping !== 'undefined') {
+        const row = weeks.find(w => w.week_key === Shopping.KEY_ROW);
+        if (row && row.data) {
+          Shopping.mergeRemoto(row.data);
+        }
+      }
     } finally {
       this._pulling = false;
     }
@@ -278,11 +290,12 @@ const DB = {
   // - Contador: incrementa _pendingSyncErrors para que el footer lo muestre.
   // - Evento: emite "db:sync-state-changed" para que el footer se actualice.
   _reportSyncError(scope, error) {
-    // scope viene como 'pushRecipes' | 'pushMenu' | 'pushTemplates'.
+    // scope viene como 'pushRecipes' | 'pushMenu' | 'pushTemplates' | 'pushShopping'.
     // Mapeamos al bucket del contador.
     const bucket = scope === 'pushRecipes' ? 'recipes'
                  : scope === 'pushMenu'    ? 'menu'
                  : scope === 'pushTemplates' ? 'templates'
+                 : scope === 'pushShopping'  ? 'shopping'
                  : null;
     if (bucket) this._pendingSyncErrors[bucket] = (this._pendingSyncErrors[bucket] || 0) + 1;
 
@@ -322,6 +335,7 @@ const DB = {
     const bucket = scope === 'pushRecipes' ? 'recipes'
                  : scope === 'pushMenu'    ? 'menu'
                  : scope === 'pushTemplates' ? 'templates'
+                 : scope === 'pushShopping'  ? 'shopping'
                  : null;
     if (!bucket) return;
     if ((this._pendingSyncErrors[bucket] || 0) > 0) {
@@ -401,8 +415,43 @@ const DB = {
     }
   },
 
-  // Plantillas → `menu_weeks` con clave `tpl:<id>` (ver TEMPLATE_KEY_PREFIX).
-  // Además borra de la nube las plantillas que ya no están en la lista:
+  // Libro de precios (tiendas + productos + precios) → UNA fila de
+  // `menu_weeks` con la clave `shopping:data`. Se guarda todo junto para
+  // no necesitar tablas nuevas en Supabase (y que funcione con rol anon).
+  async pushShopping(data) {
+    if (!this.client || this._pulling) return;
+    if (!this.isAuth()) return;
+    if (!data) return;
+
+    const row = {
+      week_key: Shopping.KEY_ROW,
+      data: {
+        tiendas: data.tiendas || [],
+        productos: data.productos || [],
+        precios: data.precios || [],
+      },
+      updated_at: new Date().toISOString(),
+    };
+
+    const res = await fetch(`${this.SUPABASE_URL}/rest/v1/menu_weeks?on_conflict=week_key`, {
+      method: 'POST',
+      headers: {
+        apikey: this.SUPABASE_KEY,
+        Authorization: `Bearer ${this.SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates',
+      },
+      body: JSON.stringify(row),
+    });
+    if (!res.ok) {
+      const msg = await res.text();
+      this._reportSyncError('pushShopping', { code: 'shop', message: msg.slice(0, 120) });
+    } else {
+      this._reportSyncSuccess('pushShopping');
+    }
+  },
+
+  // Plantillas → `menu_weeks` con clave `tpl:<id>` (ver TEMPLATE_KEY_PREFIX).  // Además borra de la nube las plantillas que ya no están en la lista:
   // sin esto, al borrar una plantilla la fila quedaba viva en Supabase y
   // el siguiente pullAll la traía de vuelta (la plantilla "no se borraba").
   async pushTemplates(templates) {

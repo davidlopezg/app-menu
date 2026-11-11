@@ -89,6 +89,28 @@ volvé a correr el script.
 > requests y la búsqueda en inglés no matchea bien ("Aceite de oliva" →
 > *Dulce de Leche*). La tabla local es la fuente.
 
+## Lista de la compra con precios
+
+En el menú ☰ → **🛒 Lista de la compra** (o el botón 🛒 abajo del grid del menú):
+
+- La lista se arma sola con las recetas de la semana: **agrupa los ingredientes
+  que se repiten** y **suma las cantidades de la misma unidad** ("500 g + 2 ud").
+  Los condimentos ("al gusto") quedan fuera.
+- Cada producto está agrupado por categoría (verduras, carnicería, pescado,
+  lácteos, despensa...) y se puede marcar como **"ya lo tengo"** con un toque.
+- **🏷️ Precio**: anotá el precio de un producto en una tienda y la app lo
+  recuerda. Con dos o más precios del mismo producto te dice **dónde sale más
+  barato**.
+- **🗺️ Dónde comprar**: reparto por tienda con el total de cada una.
+- **📋 Copiar**: genera el texto con cantidades, precios y el reparto por tienda.
+
+Todo el libro de precios (tiendas, productos, precios) se guarda en **una sola
+fila de `menu_weeks`** (clave `shopping:data`) → sincroniza entre los dos
+celulares sin necesidad de crear tablas en Supabase.
+
+Truco para comparar: escribí **el mismo nombre de producto** en cada tienda
+("Carbonell 1L") y así la app sabe que es el mismo producto.
+
 ## Mover recetas (drag & drop)
 
 En la vista de menú semanal y en la de plantilla:
@@ -100,7 +122,8 @@ En la vista de menú semanal y en la de plantilla:
 
 Los cambios se guardan y se sincronizan solos.
 
-Tests: `node tests/dragdrop.test.js` y `node tests/move-logic.test.js` (necesitan `npm i jsdom`).
+Tests: `node tests/dragdrop.test.js`, `node tests/move-logic.test.js` y
+`node tests/shopping.test.js` (necesitan `npm i jsdom`).
 
 ## Desarrollo local
 
