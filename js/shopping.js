@@ -121,6 +121,9 @@ const Shopping = {
     'alubias blancas cocidas': 'alubias',
     'setas variadas': 'setas',
     'butifarra de perol o negra': 'butifarra',
+    'butifarra negra': 'butifarra',
+    'guisantes (frescos o congelados)': 'guisantes',
+    'guisantes frescos': 'guisantes',
     'huevo': 'huevos',
   },
 
