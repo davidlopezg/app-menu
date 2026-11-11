@@ -1,5 +1,32 @@
 # PENDING — Sesión del 2026-11-10 (v41)
 
+## Nutri: completeness check de las recetas de la plantilla
+
+**Resultado:** 14/14 recetas de la plantilla completas y **71/71** de todo el
+catálogo.
+
+Antes: las 71 tenian `nutricion` en 0 (la app nunca cargo datos → las celdas
+mostraban "0 kcal" y el aviso de "cena con carbs" nunca aparecia).
+
+Causa: la app busca en la API de USDA con el texto crudo del ingrediente
+("Aceite de oliva 3 cuchara") → la API (en ingles) devuelve "Dulce de Leche";
+ademas `DEMO_KEY` corta a las ~10 requests (429).
+
+Solución: tabla de referencia local (`data/nutrition-reference.json` +
+`nutrition-extra.json` + `nutrition-alias.json`) con valores estandar por
+100 g y conversion de unidades (g/kg/ml/unidad/cuchara/cucharita/dientes/
+latas/ramo/puñado...). `scripts/calc-nutrition.mjs` calcula y escribe; solo
+completa recetas con cobertura 100%.
+
+Bugs cazados en el camino:
+- `rest()` pisaba el header `Prefer: resolution=merge-duplicates` → hacia
+  INSERT en vez de UPSERT → duplicate key en recipes_pkey.
+- normalizador: "ñ" → "pinones" (no "pinos").
+- Se vacio "Ensalada de habitas con jamon" al testear → restaurada con 8
+  ingredientes, 5 pasos y sus tags originales (cena, legumbres, verdura).
+
+## Último: drag & drop + plantilla cargada (v41)
+
 **Estado:** ✅ Resuelto y verificado contra Supabase real.
 
 ## Último: drag & drop + plantilla cargada (v41)

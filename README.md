@@ -68,6 +68,27 @@ node scripts/sb.mjs backup 2026-W41        # backup de una semana (JSON)
 node scripts/sb.mjs apply-template 2026-W41 # aplica la plantilla a esa semana
 ```
 
+## Nutrición de las recetas
+
+Las recetas tienen calculados kcal / HC / proteína / grasa / fibra / azúcares,
+a partir de las cantidades de cada ingrediente y los valores estándar por
+100 g de `data/nutrition-reference.json` (+ `nutrition-extra.json` y
+`nutrition-alias.json`).
+
+```bash
+node scripts/calc-nutrition.mjs           # solo las recetas de la plantilla
+node scripts/calc-nutrition.mjs --all     # todo el catálogo
+node scripts/calc-nutrition.mjs --dry     # no escribe, solo muestra
+```
+
+Una receta solo se completa si **todos** sus ingredientes tienen dato. Para
+añadir un alimento nuevo: editá `data/nutrition-reference.json` (o el extra) y
+volvé a correr el script.
+
+> Nota: la API de USDA no se usa para esto — con `DEMO_KEY` corta a las ~10
+> requests y la búsqueda en inglés no matchea bien ("Aceite de oliva" →
+> *Dulce de Leche*). La tabla local es la fuente.
+
 ## Mover recetas (drag & drop)
 
 En la vista de menú semanal y en la de plantilla:
