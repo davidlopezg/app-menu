@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v44 (2026-11-10)',
+  VERSION: 'v45 (2026-11-10)',
 
   // ============================================
   // Initialize
@@ -1339,30 +1339,33 @@ const App = {
     `;
 
     for (const s of plan.sesiones) {
-      const hecho = Prep.estaHecho(s.dia, wk);
+      const listos = s.platos.filter(p => Prep.estaHecho(p.id, wk)).length;
+      const completa = listos === s.platos.length;
       html += `
-        <div class="prep-day ${hecho ? 'prep-day--done' : ''}">
+        <div class="prep-day ${completa ? 'prep-day--done' : ''}">
           <div class="prep-day__head">
-            <button class="prep-day__check" onclick="App.togglePrepDay(${s.dia})" aria-label="Marcar hecho">
-              ${hecho ? '✅' : '○'}
-            </button>
             <div class="prep-day__headtext">
               <div class="prep-day__title">${Prep.DIAS_LARGO[s.dia]} ${s.fecha}</div>
               <div class="prep-day__meta">
                 ${s.platos.length} ${s.platos.length === 1 ? 'plato' : 'platos'} · ~${h(s.minutos)}
               </div>
             </div>
+            <div class="prep-day__progress">${listos}/${s.platos.length}</div>
           </div>
           <ul class="prep-items">
             ${s.platos.map(p => `
-              <li class="prep-item">
-                <div class="prep-item__name">${Components.escapeHtml(p.nombre)}</div>
-                <div class="prep-item__when">→ ${Components.escapeHtml(Prep._consumoTexto(p))}</div>
-                <div class="prep-item__why">${Components.escapeHtml(p.motivo)}</div>
-                ${p.ultimoDia - p.primerDia > p.conserva ? `
-                <div class="prep-item__warn">
-                  ⚠️ Para el ${Prep.DIAS[p.ultimoDia]} no da (aguanta ${p.conserva} días): hay que hacerlo de nuevo
-                </div>` : ''}
+              <li class="prep-item ${Prep.estaHecho(p.id, wk) ? 'prep-item--done' : ''}">
+                <button class="prep-item__check" onclick="App.togglePrepPlato('${Components.escapeHtml(p.id)}')"
+                        aria-label="Marcar hecho">${Prep.estaHecho(p.id, wk) ? '✅' : '○'}</button>
+                <div class="prep-item__body">
+                  <div class="prep-item__name">${Components.escapeHtml(p.nombre)}</div>
+                  <div class="prep-item__when">→ ${Components.escapeHtml(Prep._consumoTexto(p))}</div>
+                  <div class="prep-item__why">${Components.escapeHtml(p.motivo)}</div>
+                  ${p.ultimoDia - p.primerDia > p.conserva ? `
+                  <div class="prep-item__warn">
+                    ⚠️ Para el ${Prep.DIAS[p.ultimoDia]} no da (aguanta ${p.conserva} días): hay que hacerlo de nuevo
+                  </div>` : ''}
+                </div>
               </li>`).join('')}
           </ul>
           ${s.compartidas.length ? `
@@ -1376,8 +1379,8 @@ const App = {
     main.innerHTML = html;
   },
 
-  togglePrepDay(dia) {
-    Prep.toggleHecho(dia);
+  togglePrepPlato(id) {
+    Prep.toggleHecho(id);
     this.renderPrepView();
   },
 

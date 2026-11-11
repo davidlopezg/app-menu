@@ -57,7 +57,7 @@ const Prep = {
   ],
 
   // ------------------------------------------------------------
-  // Init / persistencia (qué sesiones ya se cocinaron, por semana)
+  // Init / persistencia (qué elaboraciones ya se hicieron, por semana)
   // ------------------------------------------------------------
   _hechos: null,
 
@@ -73,15 +73,15 @@ const Prep = {
     return (this._hechos && this._hechos[weekKey]) || [];
   },
 
-  estaHecho(dia, weekKey = Menu.getWeekKey()) {
-    return this.hechos(weekKey).includes(dia);
+  estaHecho(id, weekKey = Menu.getWeekKey()) {
+    return this.hechos(weekKey).includes(id);
   },
 
-  toggleHecho(dia, weekKey = Menu.getWeekKey()) {
+  toggleHecho(id, weekKey = Menu.getWeekKey()) {
     const lista = (this._hechos && this._hechos[weekKey]) || [];
-    const i = lista.indexOf(dia);
+    const i = lista.indexOf(id);
     if (i >= 0) lista.splice(i, 1);
-    else lista.push(dia);
+    else lista.push(id);
     this._hechos[weekKey] = lista;
     this._save();
   },

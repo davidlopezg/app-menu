@@ -1,6 +1,14 @@
-# PENDING — Sesión del 2026-11-10 (v44)
+# PENDING — Sesión del 2026-11-10 (v45)
 
-## Plan de preparación (v44)
+## Plan de preparación (v44 → v45)
+
+### v45: el check es por elaboración y el día se distingue
+
+- El ✅/○ pasó de la cabecera del día a **cada elaboración** (`togglePrepPlato`).
+  Lo guardado son ids de receta (`menuapp_prep_done`), no días.
+- La cabecera del día es una **banda de color**: título en mayúsculas, negrita,
+  barra verde a la izquierda y contador `listos/total` (la tarjeta se atenúa
+  cuando están todos hechos). Así el día no se confunde con un plato.
 
 Botón **🍳 Plan de preparación** debajo de **🛒 Ver lista de la compra**
 (también en el menú ☰). Dice **qué día cocinar cada elaboración** de la

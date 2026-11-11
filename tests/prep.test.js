@@ -140,10 +140,11 @@ check('los platos del lunes quedan en una sola sesión',
 
 console.log('\n=== CHECKLIST ===');
 check('nada hecho al empezar', Prep.hechos().length === 0);
-Prep.toggleHecho(0);
-check('marcar el lunes queda guardado', Prep.estaHecho(0) && Prep.hechos().length === 1);
-Prep.toggleHecho(0);
-check('desmarcar lo saca', !Prep.estaHecho(0) && Prep.hechos().length === 0);
+Prep.toggleHecho('r3');
+check('marcar una elaboración queda guardado', Prep.estaHecho('r3') && Prep.hechos().length === 1);
+check('las otras siguen sin marcar', !Prep.estaHecho('r4'));
+Prep.toggleHecho('r3');
+check('desmarcar lo saca', !Prep.estaHecho('r3') && Prep.hechos().length === 0);
 
 console.log('\n=== TEXTO PARA COPIAR ===');
 const texto = Prep.textoPlan(plan);
@@ -219,6 +220,11 @@ const html = document.getElementById('main-content').innerHTML;
 check('la vista de preparación se renderiza', html.includes('prep-summary') && html.includes('prep-day'));
 check('la vista lista las sesiones con su día', html.includes('Lunes') && html.includes('platos'));
 check('la vista avisa del trabajo compartido', html.includes('pollo en los 2 platos'), html.match(/prep-day__batch[^<]*/)?.[0]);
+check('el check está en cada elaboración, no en el día',
+  html.includes('App.togglePrepPlato') && !html.includes('App.togglePrepDay'),
+  `${html.includes('App.togglePrepPlato')} / ${html.includes('App.togglePrepDay')}`);
+check('el día se ve distinto (banda con título en mayúsculas)',
+  html.includes('prep-day__progress') && html.includes('prep-item__check'));
 
 App.renderMenuView();
 const menuHtml = document.getElementById('main-content').innerHTML;
