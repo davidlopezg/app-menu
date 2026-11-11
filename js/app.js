@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v40 (2026-11-10)',
+  VERSION: 'v41 (2026-11-10)',
 
   // ============================================
   // Initialize
@@ -192,6 +192,12 @@ const App = {
     `;
 
     // Days grid
+    html += `
+      <div class="drag-hint">
+        <span class="drag-hint__icon">⠿</span>
+        Mantené apretado y arrastrá una receta a otra celda para moverla
+      </div>
+    `;
     html += '<div class="menu-grid">';
     
     const daysOrder = Store.getDaysOrder();
@@ -210,7 +216,7 @@ const App = {
       Store.getMealTypes().forEach(mealType => {
         const recipeId = dayMeals[mealType];
         const recipe = recipeId ? Recipes.getById(recipeId) : null;
-        html += Components.mealCell(mealType, recipe);
+        html += Components.mealCell(mealType, recipe, { day });
       });
       
       html += `
@@ -1012,6 +1018,11 @@ const App = {
                placeholder="Opcional">
       </div>
 
+      <div class="drag-hint">
+        <span class="drag-hint__icon">⠿</span>
+        Mantené apretado y arrastrá una receta a otra celda para moverla
+      </div>
+
       <div class="menu-grid">
     `;
 
@@ -1025,7 +1036,7 @@ const App = {
       Store.getMealTypes().forEach(mealType => {
         const recipeId = dayMeals[mealType];
         const recipe = recipeId ? Recipes.getById(recipeId) : null;
-        html += Components.mealCell(mealType, recipe, { source: 'template' });
+        html += Components.mealCell(mealType, recipe, { source: 'template', day });
       });
       html += `</div></div>`;
     });
@@ -1066,10 +1077,14 @@ const App = {
     const dayLabels = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
     document.querySelectorAll('.meal-cell').forEach(cell => {
       cell.addEventListener('click', () => {
+        // click que viene después de un arrastre → ignorar
+        if (typeof DragDrop !== 'undefined' && DragDrop.shouldIgnoreClick()) return;
+
         const meal = cell.dataset.meal;
         const headerText = cell.closest('.menu-day')
                               .querySelector('.menu-day__header').textContent.toLowerCase();
-        const day = Store.getDaysOrder()[dayLabels.indexOf(headerText)];
+        const day = cell.dataset.day
+          || Store.getDaysOrder()[dayLabels.indexOf(headerText)];
         if (!day || !meal) return;
 
         if (cell.classList.contains('meal-cell--vacant')) {
@@ -1082,6 +1097,34 @@ const App = {
         }
       });
     });
+
+    // Arrastrar recetas dentro de la plantilla
+    if (typeof DragDrop !== 'undefined') {
+      DragDrop.attach(document.getElementById('main-content'), {
+        onDrop: (d) => this._moveMealInTemplate(d),
+      });
+    }
+  },
+
+  // Mueve (o intercambia) dos recetas de la plantilla
+  _moveMealInTemplate({ from, to }) {
+    const cur = Templates.getCurrent();
+    if (!cur || !from || !to) return;
+    if (from.day === to.day && from.meal === to.meal) return;
+
+    if (!cur.dias[from.day]) cur.dias[from.day] = { lunch: null, dinner: null };
+    if (!cur.dias[to.day]) cur.dias[to.day] = { lunch: null, dinner: null };
+
+    const a = cur.dias[from.day][from.meal] ?? null;
+    const b = cur.dias[to.day][to.meal] ?? null;
+
+    cur.dias[from.day][from.meal] = b;
+    cur.dias[to.day][to.meal] = a;
+    cur.updatedAt = new Date().toISOString();
+    Templates._save();
+
+    Components.toast.show('🔀 Receta movida en la plantilla');
+    this.renderTemplateView();
   },
 
   // Abre el selector de receta pero guardando en la plantilla, no en la semana
@@ -1294,9 +1337,13 @@ const App = {
   _attachMealCellListeners() {
     document.querySelectorAll('.meal-cell').forEach(cell => {
       cell.addEventListener('click', () => {
+        // click que viene después de un arrastre → ignorar
+        if (typeof DragDrop !== 'undefined' && DragDrop.shouldIgnoreClick()) return;
+
         const mealType = cell.dataset.meal;
         const day = cell.closest('.menu-day').querySelector('.menu-day__header').textContent.toLowerCase();
-        const dayKey = Store.getDaysOrder()[['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'].indexOf(day)];
+        const dayKey = cell.dataset.day
+          || Store.getDaysOrder()[['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'].indexOf(day)];
         
         if (cell.classList.contains('meal-cell--vacant')) {
           // Open recipe selector
@@ -1308,6 +1355,39 @@ const App = {
         }
       });
     });
+
+    // Arrastrar recetas entre celdas
+    if (typeof DragDrop !== 'undefined') {
+      DragDrop.attach(document.getElementById('main-content'), {
+        onDrop: (d) => this._moveMealInWeek(d),
+      });
+    }
+  },
+
+  // Mueve (o intercambia) dos recetas del menú semanal
+  _moveMealInWeek({ from, to }) {
+    if (!from || !to) return;
+    if (from.day === to.day && from.meal === to.meal) return;
+
+    const week = Menu.getCurrentWeek();
+    if (!week[from.day] || !week[to.day]) return;
+
+    const a = week[from.day][from.meal] ?? null;
+    const b = week[to.day][to.meal] ?? null;
+
+    week[from.day][from.meal] = b;
+    week[to.day][to.meal] = a;
+
+    Menu._menu[Menu.getWeekKey()] = week;
+    Menu._save();
+
+    const nameOf = (id) => (id ? (Recipes.getById(id)?.nombre || '') : '');
+    Components.toast.show(
+      b
+        ? `🔀 ${nameOf(a)} ↔ ${nameOf(b)}`
+        : `↔️ ${nameOf(a)} movida`
+    );
+    this.renderMenuView();
   },
 
   openRecipeSelector(day, mealType) {

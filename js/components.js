@@ -101,8 +101,10 @@ const Components = {
   // ============================================
   // Meal Cell
   // ============================================
-  mealCell(mealType, recipe = null, onClick) {
+  mealCell(mealType, recipe = null, opts = {}) {
     const mealLabel = T.meals[mealType];
+    // `day` permite identificar la celda sin parsear el header (drag & drop)
+    const dayAttr = opts.day ? ` data-day="${opts.day}"` : '';
     
     if (recipe) {
       const nutrition = recipe.nutricion || {};
@@ -112,16 +114,17 @@ const Components = {
       const warningIcon = hasWarning ? '<span class="meal-cell__warning">⚠️</span>' : '';
       
       return `
-        <div class="meal-cell ${warningClass}" data-meal="${mealType}" data-recipe-id="${recipe.id}">
+        <div class="meal-cell ${warningClass}" data-meal="${mealType}"${dayAttr} data-recipe-id="${recipe.id}">
           <div class="meal-cell__type">${mealLabel} ${warningIcon}</div>
           <div class="meal-cell__name">${this.escapeHtml(recipe.nombre)}</div>
           <div class="meal-cell__kcal">${nutrition.cal || 0} kcal</div>
+          <span class="meal-cell__grip" aria-hidden="true">⠿</span>
         </div>
       `;
     }
 
     return `
-      <div class="meal-cell meal-cell--vacant" data-meal="${mealType}">
+      <div class="meal-cell meal-cell--vacant" data-meal="${mealType}"${dayAttr}>
         <div class="meal-cell__type">${mealLabel}</div>
       </div>
     `;

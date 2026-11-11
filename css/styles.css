@@ -597,6 +597,74 @@ select.form-input {
   margin-left: 4px;
 }
 
+/* === Drag & Drop (mover recetas entre celdas) === */
+.meal-cell {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* asa que indica que la celda se puede arrastrar */
+.meal-cell__grip {
+  position: absolute;
+  top: 2px;
+  right: 5px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--color-text-muted);
+  opacity: 0.35;
+}
+
+/* celda de origen mientras se arrastra */
+.meal-cell--drag-source {
+  opacity: 0.3;
+}
+
+/* celda destino (donde se va a soltar) */
+.meal-cell--drop-target {
+  background: var(--color-accent) !important;
+  box-shadow: inset 0 0 0 2px var(--color-primary);
+}
+
+/* "levantar" con long press (dedo) */
+.meal-cell--armed {
+  animation: meal-cell-pulse 0.35s ease;
+  background: var(--color-accent);
+}
+
+@keyframes meal-cell-pulse {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
+/* fantasma que sigue al dedo/cursor */
+.meal-cell--ghost {
+  position: fixed !important;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.95;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  transform: scale(1.05) rotate(-1deg);
+  min-height: 0 !important;
+}
+
+/* cartelito de ayuda */
+.drag-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  padding: 0 var(--space-xs) var(--space-sm);
+}
+
+.drag-hint__icon {
+  font-size: 14px;
+  opacity: 0.7;
+}
+
 /* === Filter Tabs === */
 .filter-tabs {
   display: flex;

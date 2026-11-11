@@ -84,6 +84,30 @@ try {
       rows.forEach(r => console.log(r.week_key, JSON.stringify(r.data)));
       break;
     }
+    case 'apply-template': {
+      const target = args[0];
+      if (!target) { console.error('Uso: sb.mjs apply-template <week_key> (ej: 2026-W41)'); process.exit(1); }
+      const tpls = await rest('menu_weeks?select=*&week_key=like.tpl:*');
+      if (tpls.length === 0) { console.error('No hay plantillas.'); process.exit(1); }
+      const tpl = tpls[0];
+      const row = { week_key: target, data: tpl.data.dias || {}, updated_at: new Date().toISOString() };
+      const res = await fetch(`${URL_BASE}/rest/v1/menu_weeks?on_conflict=week_key`, {
+        method: 'POST',
+        headers: { ...headers, Prefer: 'resolution=merge-duplicates' },
+        body: JSON.stringify(row),
+      });
+      if (!res.ok) { console.error('❌', res.status, await res.text()); process.exit(1); }
+      console.log(`✅ Plantilla "${tpl.data.nombre}" aplicada a ${target}`);
+      break;
+    }
+    case 'backup': {
+      const wk = args[0];
+      if (!wk) { console.error('Uso: sb.mjs backup <week_key>'); process.exit(1); }
+      const rows = await rest(`menu_weeks?week_key=eq.${wk}&select=*`);
+      if (rows.length === 0) { console.error('Esa semana no existe.'); process.exit(1); }
+      console.log(JSON.stringify(rows[0], null, 2));
+      break;
+    }
     case 'templates': {
       // Las plantillas viven en menu_weeks con la clave `tpl:<id>`
       const rows = await rest('menu_weeks?select=*&week_key=like.tpl:*');

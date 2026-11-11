@@ -40,7 +40,6 @@ node scripts/sb.mjs sql "<query>"      # SQL directo (requiere DATABASE_URL en .
 y habilita `sb.mjs sql` (p. ej. para resetear la contraseña de un usuario).
 
 ## Plantillas de menú
-
 Una plantilla es una semana reutilizable (7 días × almuerzo/cena) que se puede
 aplicar a la semana actual o a otra.
 
@@ -64,7 +63,23 @@ CLI:
 ```bash
 node scripts/seed-template.mjs   # sube/actualiza la plantilla "Semana tipo"
 node scripts/sb.mjs menu         # lista semanas (incluye las tpl:*)
+node scripts/sb.mjs templates    # muestra las plantillas
+node scripts/sb.mjs backup 2026-W41        # backup de una semana (JSON)
+node scripts/sb.mjs apply-template 2026-W41 # aplica la plantilla a esa semana
 ```
+
+## Mover recetas (drag & drop)
+
+En la vista de menú semanal y en la de plantilla:
+
+- **Mouse/trackpad:** arrastrar la receta a otra celda.
+- **Teléfono:** mantener apretado ~0,25 s (la celda vibra) y arrastrar.
+- Soltar en una celda **vacía** → mueve. Soltar en una celda **con receta** → intercambia.
+- Un toque corto sigue siendo un toque: abre el menú de opciones de esa comida.
+
+Los cambios se guardan y se sincronizan solos.
+
+Tests: `node tests/dragdrop.test.js` y `node tests/move-logic.test.js` (necesitan `npm i jsdom`).
 
 ## Desarrollo local
 
