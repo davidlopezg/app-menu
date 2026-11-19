@@ -171,6 +171,54 @@ Shopping.removeManual(papel.id);
 const items6 = Shopping.buildList();
 check('al borrar desaparece de la lista', !items6.some(i => i.nombre === 'Papel de cocina'));
 
+console.log('\n=== BUGS DE LA LISTA (v48) ===');
+// Recetas que disparan los bugs que se cazaron contra el catálogo real
+Recipes._recipes.push(
+  { id: 'v1', nombre: 'Con aceite', tipoComida: 'cena', tags: [], nutricion: {},
+    ingredientes: [
+      { nombre: 'Aceite de oliva', cantidad: '3', unidad: 'cucharas' },
+      { nombre: 'Vinagre', cantidad: '1', unidad: 'cuchara' },
+      { nombre: 'Ajo rallado', cantidad: '1', unidad: 'diente' },
+      { nombre: 'Filetes de salmón', cantidad: '4', unidad: 'unidad' },
+      { nombre: 'Salsa de tomate', cantidad: '400', unidad: 'g' },
+    ], pasos: [] },
+  { id: 'v2', nombre: 'Con sal', tipoComida: 'cena', tags: [], nutricion: {},
+    ingredientes: [
+      { nombre: 'Aceite de oliva', cantidad: 'al gusto', unidad: 'none' },
+      { nombre: 'Vinagre', cantidad: 'al gusto', unidad: 'none' },
+      { nombre: 'Ajo', cantidad: '2', unidad: 'dientes' },
+      { nombre: 'Cebolla morada', cantidad: '1/2', unidad: 'unidad' },
+      { nombre: 'Agua', cantidad: '600', unidad: 'ml' },
+      { nombre: 'Perejil', cantidad: 'un puñado', unidad: 'none' },
+      { nombre: 'Cerveza', cantidad: '2', unidad: 'unidad' },
+    ], pasos: [] },
+);
+Menu._menu[Menu.getWeekKey()] = {
+  monday:    { lunch: 'v1', dinner: 'v2' },
+  tuesday:   { lunch: null, dinner: null },
+  wednesday: { lunch: null, dinner: null },
+  thursday:  { lunch: null, dinner: null },
+  friday:    { lunch: null, dinner: null },
+  saturday:  { lunch: null, dinner: null },
+  sunday:    { lunch: null, dinner: null },
+};
+const itemsV = Shopping.buildList();
+const itemV = nombre => itemsV.find(i => i.nombre.toLowerCase() === nombre.toLowerCase());
+
+check('el aceite NO desaparece por aparecer "al gusto" en otra receta',
+  !!itemV('Aceite de oliva'), itemsV.map(i => i.nombre).join(', '));
+check('el aceite conserva su cantidad real', itemV('Aceite de oliva')?.cantidad === '3 cda', itemV('Aceite de oliva')?.cantidad);
+check('el vinagre tampoco desaparece', itemV('Vinagre')?.cantidad === '1 cda', itemV('Vinagre')?.cantidad);
+check('"Ajo rallado" y "Ajo" son la misma fila', itemsV.filter(i => i.nombre.toLowerCase() === 'ajo').length === 1,
+  itemsV.filter(i => i.nombre.toLowerCase().includes('ajo')).map(i => i.nombre).join(' | '));
+check('las unidades "diente" y "ud" se suman', itemV('Ajo')?.cantidad === '3 dientes', itemV('Ajo')?.cantidad);
+check('las fracciones se calculan (1/2 → 0,5)', itemV('Cebolla morada')?.cantidad === '0,5 ud', itemV('Cebolla morada')?.cantidad);
+check('el agua no se compra', !itemV('Agua'));
+check('"un puñado" no es una cantidad que se compre', !itemV('Perejil'));
+check('el salmón es pescado, no despensa', itemV('Salmón')?.categoria === 'pescado', itemV('Salmón')?.categoria);
+check('la salsa de tomate es despensa', itemV('Salsa de tomate')?.categoria === 'despensa', itemV('Salsa de tomate')?.categoria);
+check('la cerveza es bebida', itemV('Cerveza')?.categoria === 'bebidas', itemV('Cerveza')?.categoria);
+
 console.log('\n=== SYNC DE PRODUCTOS A MANO ===');
 const fila = Shopping.toRow();
 check('la fila de la nube lleva los productos a mano', !!(fila.data.extras && fila.data.extras[Menu.getWeekKey()]));

@@ -1,3 +1,49 @@
+# PENDING — Sesión del 2026-11-19 (v48)
+
+## La lista de la compra, cazada contra el catálogo real (issue #1)
+
+Se revisó la lista contra las **75 recetas** de Supabase y contra el menú real
+de la semana (2026-W47) y aparecieron bugs de verdad:
+
+### Bugs corregidos
+
+- **El aceite desaparecía de la lista**: si un ingrediente sale "al gusto" en
+  una receta y con cantidad real en otra, la fila entera se borraba (pasaba
+  con el aceite de oliva, el vinagre y la mantequilla). Ahora solo cuenta la
+  cantidad real.
+- **Agua en la lista** (600 ml) → fuera (`NO_COMPRAR`).
+- **"un puñado", "unas hojas", "suficiente"** ya no son productos: solo
+  cuentan las cantidades con número.
+- **"1/2 unidad" se leía como 1** → ahora 0,5 (también "1 1/2" → 1,5).
+- **Alias muertos**: los que tenían paréntesis ("pollo (muslos o entero en
+  piezas)") nunca casaban, porque el nombre se normaliza sin paréntesis. Ahora
+  los alias se normalizan igual → funcionan.
+- **Duplicados**: "Ajo rallado" y "Ajo" eran 2 filas; igual "Nueces peladas",
+  "Lechuga romana", "Butifarras", "Calamares limpios", "Pulpo y/o calamar",
+  "Agua o caldo", "Miel o sirope de agave"… → ahora 1 sola fila.
+- **Unidades mezcladas**: "2 ud" + "1 diente" del mismo producto → "3 dientes".
+  Y el plural correcto ("2 ramos", "3 dientes", "2 latas").
+- **Categorías equivocadas**: "salmón" caía en despensa (por "sal"), "panceta"
+  en panadería (por "pan"), "salsa de tomate" en verduras (por "tomate"),
+  "caldo de pollo" en carnicería (por "pollo"), "atún fresco" en carnicería
+  (por "filete"). Ahora el match es por palabra completa, con plural.
+- **31 ingredientes sin categoría** (vino, cerveza, nueces, piñones,
+  aceitunas, tofu, pesto…) → todos tienen sección. Nueva sección **Bebidas**.
+- **Nombres con paréntesis** ("Sake (opcional)") → "Sake".
+
+### Datos corregidos en Supabase
+
+- "Pasta a la carbonara": 4 huevos con unidad `g` → `unidad`.
+- "Arroz a la cubana" y "Vaso de Gazpacho": "dientes de ajo" con unidad
+  `unidad` → `dientes`.
+
+### En la semana real (2026-W47)
+
+De 43 productos con 5 en "Otros" y errores de cantidad → **42 productos, 0 en
+"Otros"**, "Cebolla morada 0,5 ud" (era 1), sin agua y con las secciones bien.
+
+`tests/shopping.test.js`: **56 tests** (11 nuevos para estos bugs).
+
 # PENDING — Sesión del 2026-11-19 (v47)
 
 ## Productos a mano en la lista de la compra (issue #1)

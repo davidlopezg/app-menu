@@ -29,16 +29,26 @@ const Shopping = {
     { id: '51111111-0000-4000-8000-000000000007', nombre: 'Mercado',   tipo: 'mercado', direccion: '' },
   ],
 
-  // Categorías (por palabra clave en el nombre del ingrediente)
+  // Categorías (por palabra clave en el nombre del ingrediente).
+  // El match es por palabra completa (no por trozo): así "salmón" NO cae en
+  // "sal" (despensa) ni "panceta" en "pan" (panadería).
   CATEGORIAS: [
-    { key: 'verduras', label: 'Verduras y frutas', icon: '🥬', words: ['tomate','tomates','cebolla','pimiento','pimientos','patata','patatas','zanahoria','lechuga','calabacin','berenjena','pepino','espinaca','apio','albahaca','perejil','cilantro','eneldo','oregano','romero','tomillo','rucula','endibia','esparragos','champinon','setas','seta','puerro','ajo','manzana','naranja','platano','pera','uva','fresa','limon','mandarina','kiwi','melon','aguacate','banana','ciruela','pera'] },
-    { key: 'carniceria', label: 'Carnicería', icon: '🥩', words: ['pollo','ternera','cerdo','lomo','codillo','hamburguesa','chorizo','tocino','bacon','jamon','salchicha','butifarra','costillar','filete','filetes','pechuga','muslo','muslos','chuleton','entrecot','solomillo','milanesa','carne','pavo','pato','bistec'] },
-    { key: 'pescado', label: 'Pescado', icon: '🐟', words: ['merluza','salmon','atun','bacalao','lubina','dorada','calamar','sepia','pulpo','gamba','almeja','mejillon','sardina','boqueron','anchoa','trucha','rape','lenguado','pez','anchoas'] },
-    { key: 'lacteos', label: 'Lácteos y huevos', icon: '🥛', words: ['leche','queso','yogur','nata','crema','mantequilla','huevo','huevos','caciotta','ricotta'] },
-    { key: 'despensa', label: 'Despensa', icon: '🥫', words: ['pasta','arroz','harina','azucar','aceite','sal','lenteja','garbanzo','alubia','haba','habas','fabes','judia','tomate triturado','caldo','pan','fideos','espaguetis','macarrones','couscous','quinoa','avena','miel','mostaza','ketchup','mayonesa','salsa','vinagre','comino','pimenton','curri','azafran','laurel'] },
-    { key: 'congelados', label: 'Congelados', icon: '🧊', words: ['congelado','congelados','helado','hielo'] },
-    { key: 'panaderia', label: 'Panadería', icon: '🥖', words: ['tostada','baguette','barra','magdalena','galleta','croissant','muffin','pan integral','pan rallado','pan de','pan de molde'] },
+    { key: 'verduras', label: 'Verduras y frutas', icon: '🥬', words: ['tomate','cebolla','pimiento','patata','zanahoria','lechuga','calabacin','berenjena','pepino','espinaca','apio','albahaca','perejil','cilantro','eneldo','oregano','romero','tomillo','rucula','endibia','esparragos','champinon','seta','puerro','ajo','manzana','naranja','platano','pera','uva','fresa','limon','mandarina','kiwi','melon','aguacate','banana','ciruela','guisante','judia verde','judias verdes','haba verde','habas verdes','jengibre','piña','mango','alcachofa','calabaza','maiz dulce','fruta'] },
+    { key: 'carniceria', label: 'Carnicería', icon: '🥩', words: ['pollo','ternera','cerdo','lomo','codillo','chorizo','tocino','bacon','jamon','salchicha','butifarra','costillar','pechuga','muslo','chuleton','entrecot','solomillo','milanesa','carne','pavo','pato','bistec','panceta','guanciale','morcilla','cordero','carrillera','gulas'] },
+    { key: 'pescado', label: 'Pescado', icon: '🐟', words: ['merluza','salmon','atun','bacalao','lubina','dorada','calamar','sepia','pulpo','gamba','almeja','mejillon','sardina','boqueron','anchoa','trucha','rape','lenguado','pez','vieira','cigala'] },
+    { key: 'lacteos', label: 'Lácteos y huevos', icon: '🥛', words: ['leche','queso','yogur','nata','crema','mantequilla','huevo','caciotta','ricotta','burrata','mozzarella','mascarpone','kefir'] },
+    { key: 'despensa', label: 'Despensa', icon: '🥫', words: ['pasta','arroz','harina','azucar','aceite','sal','lenteja','garbanzo','alubia','haba','fabe','judia','tomate triturado','caldo','fideos','espagueti','macarron','couscous','quinoa','avena','miel','mostaza','ketchup','mayonesa','salsa','vinagre','comino','pimenton','curri','azafran','laurel','guindilla','pimienta','nuez moscada','canela','clavo','cacao','cafe','chocolate','frutos seco','nuez','nueces','almendra','pinon','piones','castaña','cacahuete','aceituna','agua','levadura','maicena','miso','alga','wakame','tofu','pesto','sesamo','lupulo','masala'] },
+    { key: 'panaderia', label: 'Panadería', icon: '🥖', words: ['pan','tostada','baguette','barra','magdalena','galleta','croissant','muffin','picatostes','frankfurt','pan rallado','pan de molde','tortita','donut','ensaimada'] },
+    { key: 'congelados', label: 'Congelados', icon: '🧊', words: ['congelado','helado','hielo'] },
+    { key: 'bebidas', label: 'Bebidas', icon: '🍷', words: ['vino','cerveza','mirin','sake','refresco','zumo','soda','cava','espumoso','ron','whisky','ginebra','vodka','agua mineral'] },
   ],
+
+  // Cosas que no se compran: ya las tenés en casa.
+  NO_COMPRAR: ['agua'],
+
+  // "Salsa de tomate" es despensa (no es un tomate) y "Caldo de pollo"
+  // también (no es pollo).
+  PREFIJOS: { 'salsa': 'despensa', 'caldo': 'despensa' },
 
   // ------------------------------------------------------------
   // Init / persistencia
@@ -52,6 +62,7 @@ const Shopping = {
     this._data.productos = this._data.productos || [];
     this._data.precios = this._data.precios || [];
     this._data.extras = this._data.extras || {};   // productos a mano, por semana
+    this._aliasMap = null;
 
     // Tiendas por defecto solo si no hay ninguna
     if (this._data.tiendas.length === 0) {
@@ -126,6 +137,25 @@ const Shopping = {
     'guisantes (frescos o congelados)': 'guisantes',
     'guisantes frescos': 'guisantes',
     'huevo': 'huevos',
+    // --- v48: unificaciones que faltaban (mismo producto, 2 filas) ---
+    'ajo rallado': 'ajo',
+    'nueces peladas': 'nueces',
+    'lechuga romana o iceberg': 'lechuga',
+    'manzana verde': 'manzana',
+    'pimenton o perejil': 'pimentón',
+    'romero y tomillo': 'romero',
+    'tomillo y laurel': 'tomillo',
+    'miel o sirope de agave': 'miel',
+    'mantequilla o aceite': 'mantequilla',
+    'pasta rellena (ravioles, cappelletti, tortelloni)': 'pasta',
+    'caldo de pollo o verduras': 'caldo de pollo',
+    'agua o caldo': 'agua',
+    'agua fria': 'agua',
+    'aguacate': 'aguacate',
+    'diente de ajo': 'ajo',
+    'calamares limpios': 'calamar limpio',
+    'butifarras': 'butifarra',
+    'pulpo y/o calamar': 'pulpo',
   },
 
   // Cómo se muestra cada canónico (con tildes y mayúscula)
@@ -160,25 +190,84 @@ const Shopping = {
   },
 
   // Nombre canónico de un ingrediente (para agrupar y para los precios)
+  // Los alias se normalizan igual que los ingredientes: así los que tienen
+  // paréntesis ("pollo (muslos o entero en piezas)") también funcionan.
+  _alias() {
+    if (!this._aliasMap) {
+      this._aliasMap = {};
+      for (const [k, v] of Object.entries(this.ALIAS_ING)) this._aliasMap[this._norm(k)] = v;
+    }
+    return this._aliasMap;
+  },
+
   _canon(nombre) {
     const n = this._norm(nombre);
-    return this.ALIAS_ING[n] || n;
+    return this._alias()[n] || n;
   },
+
+  // Nombre que se muestra en la lista: el del alias si unifica
+  // ("Ajo rallado" → "Ajo") y sin los paréntesis ("Sake (opcional)" → "Sake").
+  _labelDe(nombreOriginal) {
+    const crudo = String(nombreOriginal || '').replace(/\s*\([^)]*\)/g, '').trim() || String(nombreOriginal || '');
+    const alias = this._alias()[this._norm(nombreOriginal)];
+    if (alias) {
+      const key = this._norm(alias);
+      if (this.CANON_LABEL[key]) return this.CANON_LABEL[key];
+      if (this._norm(crudo).includes(key)) return this._titulo(alias);
+    }
+    return crudo;
+  },
+
+  _titulo(s) {
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  },
+
+  // Unidad canónica (singular). El plural se pone al mostrar ("2 dientes").
+  // Unidades "contables" (piezas): si el mismo producto sale con "ud" en una
+  // receta y con "dientes" en otra, se suman en la misma (no "2 ud + 1 diente").
+  UNIDADES_PIEZA: ['ud', 'diente', 'lata', 'hoja', 'loncha', 'rebanada', 'rodaja', 'ramo'],
 
   _unidad(u) {
     return ({
       'g': 'g', 'ml': 'ml', 'kg': 'kg', 'l': 'l',
-      'unidad': 'ud', 'diente': 'dientes', 'dientes': 'dientes',
+      'unidad': 'ud', 'ud': 'ud',
+      'diente': 'diente', 'dientes': 'diente',
       'cuchara': 'cda', 'cucharas': 'cda', 'cucharita': 'cdta', 'cucharitas': 'cdta',
       'cucharadita': 'cdta',
-      'lata': 'latas', 'latas': 'latas', 'ramo': 'ramo', 'ramas': 'ramo',
+      'lata': 'lata', 'latas': 'lata',
+      'ramo': 'ramo', 'ramas': 'ramo',
+      'hoja': 'hoja', 'hojas': 'hoja',
+      'loncha': 'loncha', 'lonchas': 'loncha',
+      'rebanada': 'rebanada', 'rebanadas': 'rebanada',
+      'rodaja': 'rodaja', 'rodajas': 'rodaja',
       'puñado': 'puñado', 'puñados': 'puñado', 'sobre': 'sobre', 'sobres': 'sobre',
       'none': '',
     })[this._norm(u)] || (u || '');
   },
 
+  // Plural de la unidad cuando la cantidad es > 1 ("2 dientes", "1 diente")
+  _uLabel(u, n) {
+    const plural = {
+      diente: 'dientes', lata: 'latas', ramo: 'ramos', hoja: 'hojas',
+      loncha: 'lonchas', rebanada: 'rebanadas', rodaja: 'rodajas',
+    };
+    return (n > 1 && plural[u]) ? plural[u] : u;
+  },
+
+  // Número con fracciones: "1/2" → 0.5 · "1 1/2" → 1.5 · "0,5" → 0.5
   _num(cantidad) {
-    const n = parseFloat(String(cantidad ?? '').replace(',', '.'));
+    const s = String(cantidad ?? '').trim().replace(',', '.');
+    if (!s) return null;
+    const mixto = s.match(/^(\d+(?:\.\d+)?)\s+(\d+)\s*\/\s*(\d+)$/);
+    if (mixto) {
+      const den = parseFloat(mixto[3]);
+      return den ? parseFloat(mixto[1]) + parseFloat(mixto[2]) / den : null;
+    }
+    if (s.includes('/')) {
+      const [a, b] = s.split('/').map(x => parseFloat(x));
+      return (!isNaN(a) && !isNaN(b) && b !== 0) ? a / b : null;
+    }
+    const n = parseFloat(s);
     return isNaN(n) ? null : n;
   },
 
@@ -208,13 +297,26 @@ const Shopping = {
     return `${d} ${c}`;
   },
 
+  // Categoría de un ingrediente: match por palabra completa (con plural),
+  // no por trozos → "salmón" NO es despensa ("sal") ni "panceta" panadería ("pan").
   _categoria(nombre, producto) {
     if (producto && producto.categoria && producto.categoria !== 'otros') return producto.categoria;
     const n = this._norm(nombre);
+    for (const [p, cat] of Object.entries(this.PREFIJOS)) {
+      if (n.startsWith(p + ' ')) return cat;
+    }
     for (const c of this.CATEGORIAS) {
-      if (c.words.some(w => n.includes(w))) return c.key;
+      if (c.words.some(w => this._matchPalabra(n, w))) return c.key;
     }
     return 'otros';
+  },
+
+  // "sal" NO matchea "salmón" ni "panceta"; "pimiento" sí matchea "pimientos"
+  _matchPalabra(n, palabra) {
+    const w = this._norm(palabra);
+    if (w.includes(' ')) return n.includes(w);
+    const esc = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b${esc}(s|es)?\\b`).test(n);
   },
 
   // ------------------------------------------------------------
@@ -409,15 +511,14 @@ const Shopping = {
           if (!acc.has(key)) {
             acc.set(key, {
               key,
-              nombre: this.CANON_LABEL[key] || ing.nombre,
+              nombre: this.CANON_LABEL[key] || this._labelDe(ing.nombre),
               cantidades: {},   // { unidad: cantidad }
-              texto: [],        // cantidades no numéricas ("al gusto")
-              condimento: false,
+              texto: [],        // cantidades escritas a mano ("un paquete")
               origen: [],       // de qué platos sale este ingrediente
             });
           }
           const item = acc.get(key);
-          const unidad = this._unidad(ing.unidad);
+          let unidad = this._unidad(ing.unidad);
           const n = this._num(ing.cantidad);
 
           // de qué plato viene (para que la lista no parezca arbitraria)
@@ -426,16 +527,21 @@ const Shopping = {
           }
 
           if (n === null) {
-            // "al gusto" = condimento (no se compra). "un puñado" = cantidad real.
-            if (/al\s+gusto/i.test(String(ing.cantidad))) {
-              item.condimento = true;
-            } else if (!item.texto.includes(String(ing.cantidad))) {
-              item.texto.push(String(ing.cantidad));
-            }
+            // "al gusto", "un puñado", "unas hojas", "suficiente"... no es una
+            // cantidad que se pueda comprar → no cuenta para la lista.
+            // (si el mismo producto aparece con cantidad real en otra receta,
+            //  el producto SÍ sale: solo se ignora esta mención)
           } else if (unidad) {
+            // "2 ud" + "1 diente" del mismo producto → una sola cantidad
+            if (item.cantidades[unidad] === undefined) {
+              const misma = Object.keys(item.cantidades)
+                .find(u => this.UNIDADES_PIEZA.includes(u) && this.UNIDADES_PIEZA.includes(unidad));
+              if (misma) unidad = misma;
+            }
             item.cantidades[unidad] = (item.cantidades[unidad] || 0) + n;
           } else {
-            item.condimento = true;
+            // número sin unidad → unidades
+            item.cantidades.ud = (item.cantidades.ud || 0) + n;
           }
         });
       });
@@ -455,10 +561,9 @@ const Shopping = {
       }
       const item = {
         key,
-        nombre: this.CANON_LABEL[key] || manual.nombre,
+        nombre: this.CANON_LABEL[key] || this._labelDe(manual.nombre),
         cantidades: {},
         texto: [],
-        condimento: false,
         origen: [],
         manual: true,
         manualId: manual.id,
@@ -470,13 +575,13 @@ const Shopping = {
 
     const items = [...acc.values()].map(item => {
       const partes = Object.entries(item.cantidades)
-        .map(([u, c]) => `${this._fmt(c, c % 1 === 0 ? 0 : 1)} ${u}`);
+        .map(([u, c]) => `${this._fmt(c, c % 1 === 0 ? 0 : 1)} ${this._uLabel(u, c)}`);
       if (item.texto.length) partes.push(item.texto.join(', '));
       const producto = this.getProductosDe(item.nombre)[0] || null;
       const precio = this.mejorPrecio(item.nombre);
       return {
         ...item,
-        cantidad: partes.join(' + ') || 'al gusto',
+        cantidad: partes.join(' + '),
         categoria: item.manualCategoria || this._categoria(item.nombre, producto),
         producto,
         precio: precio ? precio.precio : null,
@@ -487,14 +592,15 @@ const Shopping = {
     });
 
     // ordena por categoría y luego por nombre
-    const ordenCat = ['verduras', 'carniceria', 'pescado', 'lacteos', 'despensa', 'panaderia', 'congelados', 'otros'];
+    const ordenCat = ['verduras', 'carniceria', 'pescado', 'lacteos', 'despensa', 'panaderia', 'congelados', 'bebidas', 'otros'];
     items.sort((a, b) => {
       const ca = ordenCat.indexOf(a.categoria), cb = ordenCat.indexOf(b.categoria);
       if (ca !== cb) return ca - cb;
       return a.nombre.localeCompare(b.nombre, 'es');
     });
-    // los condimentos ("al gusto") no van a la lista de la compra
-    return items.filter(i => !i.condimento);
+    // Solo lo que se compra de verdad: cantidad numérica (o lo que escribió
+    // el usuario a mano) y no cosas que ya tenés en casa (el agua).
+    return items.filter(i => i.cantidad && !this.NO_COMPRAR.includes(i.key));
   },
 
   // ------------------------------------------------------------
@@ -526,14 +632,13 @@ const Shopping = {
   },
 
   sinPrecio(items) {
-    return items.filter(it => it.precio === null && !it.condimento);
+    return items.filter(it => it.precio === null);
   },
 
   // Reparte los productos por la tienda más barata de cada uno
   porTienda(items) {
     const grupos = new Map();
     for (const it of items) {
-      if (it.condimento) continue;
       const tid = it.tienda ? it.tienda.id : null;
       if (!grupos.has(tid)) {
         grupos.set(tid, { tienda: it.tienda, items: [], total: 0, sinPrecio: 0 });
