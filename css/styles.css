@@ -1932,6 +1932,12 @@ select.form-input {
   background: var(--color-accent);
 }
 
+/* borrar un producto añadido a mano */
+.shop-item__tag--del {
+  color: var(--color-text-muted);
+  font-size: 16px;
+}
+
 .shop-prices {
   margin-bottom: var(--space-md);
 }

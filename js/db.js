@@ -429,6 +429,7 @@ const DB = {
         tiendas: data.tiendas || [],
         productos: data.productos || [],
         precios: data.precios || [],
+        extras: data.extras || {},   // productos añadidos a mano, por semana
       },
       updated_at: new Date().toISOString(),
     };

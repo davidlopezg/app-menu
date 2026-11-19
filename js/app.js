@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v46 (2026-11-10)',
+  VERSION: 'v47 (2026-11-19)',
 
   // ============================================
   // Initialize
@@ -1013,6 +1013,7 @@ const App = {
           ${faltan ? ` · ✅ ${faltan} ya comprados` : ''}
         </div>
         <div class="shop-summary__actions">
+          <button class="btn btn--primary btn--sm" onclick="App.openAddProductModal()">➕ Producto</button>
           <button class="btn btn--outline btn--sm" onclick="App.copyShoppingList()">📋 Copiar</button>
           <button class="btn btn--outline btn--sm" onclick="App.showStoresModal()">🏪 Tiendas</button>
           <button class="btn btn--outline btn--sm" onclick="App.showStoresByShop()">🗺️ Dónde comprar</button>
@@ -1028,6 +1029,11 @@ const App = {
           <ul class="shop-items">
       `;
       for (const it of lista) {
+        const origen = [
+          Shopping._donde(it),
+          Shopping._de(it),
+          it.manual ? 'añadido a mano' : '',
+        ].filter(Boolean).join(' · ');
         html += `
           <li class="shop-item ${it.comprado ? 'shop-item--done' : ''}">
             <button class="shop-item__check" onclick="App.toggleBought('${Components.escapeHtml(it.key)}')"
@@ -1041,10 +1047,12 @@ const App = {
                      <span class="shop-item__shop">${Components.escapeHtml(it.tienda.nombre)}</span>`
                   : ''}
               </div>
-              <div class="shop-item__from">${Components.escapeHtml(Shopping._donde(it))} · ${Components.escapeHtml(Shopping._de(it))}</div>
+              <div class="shop-item__from">${Components.escapeHtml(origen)}</div>
             </div>
             <button class="shop-item__tag" onclick="App.openPriceModal('${Components.escapeHtml(it.key)}')"
                     aria-label="Poner precio">🏷️</button>
+            ${it.manual ? `<button class="shop-item__tag shop-item__tag--del" onclick="App.removeShoppingItem('${it.manualId}')"
+                    aria-label="Quitar de la lista">✕</button>` : ''}
           </li>`;
       }
       html += '</ul></div>';
@@ -1056,6 +1064,68 @@ const App = {
 
   toggleBought(key) {
     Shopping.toggleComprado(key);
+    this.renderShoppingView();
+  },
+
+  // Modal: añadir un producto a mano (no sale de ninguna receta)
+  openAddProductModal() {
+    const tiendas = Shopping.getTiendas();
+    const cats = Shopping.CATEGORIAS.map(c =>
+      `<option value="${c.key}">${c.icon} ${Components.escapeHtml(c.label)}</option>`).join('');
+
+    Components.modal.open('➕ Añadir producto', `
+      <label style="font-size: 13px; color: var(--color-text-muted);">Producto</label>
+      <input type="text" id="ap-nombre" class="form-input" placeholder="Ej: Papel de cocina" style="margin-bottom: 12px;">
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Cantidad (opcional)</label>
+      <input type="text" id="ap-cantidad" class="form-input" placeholder="Ej: 2 ud, 1 kg" style="margin-bottom: 12px;">
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Categoría</label>
+      <select id="ap-categoria" class="form-input" style="margin-bottom: 12px;">
+        <option value="">Automática</option>
+        ${cats}
+        <option value="otros">📦 Otros</option>
+      </select>
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Precio (€) — opcional</label>
+      <input type="number" id="ap-precio" class="form-input" step="0.01" min="0" inputmode="decimal"
+             placeholder="0,00" style="margin-bottom: 12px;">
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Tienda — opcional</label>
+      <select id="ap-tienda" class="form-input" style="margin-bottom: 16px;">
+        ${tiendas.map(t => `<option value="${t.id}">${Components.escapeHtml(t.nombre)}</option>`).join('')}
+        <option value="">— sin tienda —</option>
+      </select>
+
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn--primary" style="flex: 1;" onclick="App.saveShoppingProduct()">Añadir</button>
+        <button class="btn btn--ghost" onclick="Components.modal.close()">Cancelar</button>
+      </div>
+    `);
+  },
+
+  saveShoppingProduct() {
+    const nombre = document.getElementById('ap-nombre')?.value.trim();
+    if (!nombre) { Components.toast.show('⚠️ Escribí el nombre del producto'); return; }
+    const cantidad = document.getElementById('ap-cantidad')?.value.trim() || '';
+    const categoria = document.getElementById('ap-categoria')?.value || '';
+    const precio = document.getElementById('ap-precio')?.value;
+    const tiendaId = document.getElementById('ap-tienda')?.value || null;
+
+    Shopping.addManual({ nombre, cantidad, categoria, precio, tiendaId });
+    Components.modal.close();
+    if (precio !== '' && !tiendaId) {
+      Components.toast.show('⚠️ El precio necesita una tienda: no se guardó');
+    } else {
+      Components.toast.show(`✅ ${nombre} añadido a la lista`);
+    }
+    this.renderShoppingView();
+  },
+
+  removeShoppingItem(id) {
+    if (!confirm('¿Quitar este producto de la lista?')) return;
+    Shopping.removeManual(id);
+    Components.toast.show('🗑️ Quitado de la lista');
     this.renderShoppingView();
   },
 

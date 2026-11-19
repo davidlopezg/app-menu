@@ -51,6 +51,7 @@ const Shopping = {
     this._data.tiendas = this._data.tiendas || [];
     this._data.productos = this._data.productos || [];
     this._data.precios = this._data.precios || [];
+    this._data.extras = this._data.extras || {};   // productos a mano, por semana
 
     // Tiendas por defecto solo si no hay ninguna
     if (this._data.tiendas.length === 0) {
@@ -292,6 +293,61 @@ const Shopping = {
   },
 
   // ------------------------------------------------------------
+  // Productos a mano (los que NO salen de ninguna receta)
+  // ------------------------------------------------------------
+  // "Papel de cocina", "cerveza", "limpieza"... cosas que también hay que
+  // comprar pero no están en el menú. Viven en el libro (que sí sincroniza)
+  // → se ven en los dos móviles.
+  _extras(weekKey = Menu.getWeekKey()) {
+    if (!this._data.extras[weekKey]) this._data.extras[weekKey] = { items: [] };
+    if (!this._data.extras[weekKey].items) this._data.extras[weekKey].items = [];
+    return this._data.extras[weekKey];
+  },
+
+  addManual({ nombre, cantidad = '', categoria = '', precio = null, tiendaId = null }) {
+    const n = (nombre || '').trim();
+    if (!n) return null;
+    const item = {
+      id: Store.uuid(),
+      nombre: n,
+      cantidad: String(cantidad || '').trim(),
+      categoria: categoria || this._categoria(n, null),
+    };
+    this._extras().items.push(item);
+    // si viene con precio, se guarda en el libro → total y reparto funcionan
+    if (tiendaId && precio !== null && precio !== '' && !isNaN(parseFloat(precio))) {
+      const producto = this.ensureProducto({ ingrediente: n, nombre: n });
+      this.setPrecio(producto.id, tiendaId, precio);
+    }
+    this._save();
+    return item;
+  },
+
+  removeManual(id) {
+    for (const wk of Object.keys(this._data.extras)) {
+      const s = this._data.extras[wk] || {};
+      s.items = (s.items || []).filter(i => i.id !== id);
+    }
+    this._save();
+  },
+
+  // "2", "2 ud", "1 kg" → lo suma a las cantidades si la unidad ya existe
+  _sumarCantidad(item, texto) {
+    const t = String(texto || '').trim();
+    if (!t) return;
+    const m = t.match(/^(\d+(?:[.,]\d+)?)\s*([a-zA-ZáéíóúüñÁÉÍÓÚÜÑ%]*)$/);
+    if (m) {
+      const n = this._num(m[1]);
+      if (n !== null) {
+        const u = this._unidad(m[2]) || 'ud';
+        item.cantidades[u] = (item.cantidades[u] || 0) + n;
+        return;
+      }
+    }
+    if (!item.texto.includes(t)) item.texto.push(t);
+  },
+
+  // ------------------------------------------------------------
   // Precios
   // ------------------------------------------------------------
   setPrecio(productoId, tiendaId, precio) {
@@ -385,6 +441,33 @@ const Shopping = {
       });
     });
 
+    // Productos añadidos a mano: si ya hay una fila con ese producto
+    // (de una receta) se SUMA a la misma fila → la lista no se repite.
+    for (const manual of (this._extras(weekKey).items || [])) {
+      const key = this._norm(this._canon(manual.nombre));
+      if (!key) continue;
+      if (acc.has(key)) {
+        const item = acc.get(key);
+        item.manual = true;
+        item.manualId = manual.id;
+        this._sumarCantidad(item, manual.cantidad);
+        continue;
+      }
+      const item = {
+        key,
+        nombre: this.CANON_LABEL[key] || manual.nombre,
+        cantidades: {},
+        texto: [],
+        condimento: false,
+        origen: [],
+        manual: true,
+        manualId: manual.id,
+        manualCategoria: manual.categoria,
+      };
+      this._sumarCantidad(item, manual.cantidad);
+      acc.set(key, item);
+    }
+
     const items = [...acc.values()].map(item => {
       const partes = Object.entries(item.cantidades)
         .map(([u, c]) => `${this._fmt(c, c % 1 === 0 ? 0 : 1)} ${u}`);
@@ -394,7 +477,7 @@ const Shopping = {
       return {
         ...item,
         cantidad: partes.join(' + ') || 'al gusto',
-        categoria: this._categoria(item.nombre, producto),
+        categoria: item.manualCategoria || this._categoria(item.nombre, producto),
         producto,
         precio: precio ? precio.precio : null,
         tienda: precio ? precio.tienda : null,
@@ -493,6 +576,7 @@ const Shopping = {
         tiendas: this._data.tiendas,
         productos: this._data.productos,
         precios: this._data.precios,
+        extras: this._data.extras,
       },
       updated_at: new Date().toISOString(),
     };
@@ -501,7 +585,7 @@ const Shopping = {
   // Merge: lo local gana en conflicto, pero no se pierde lo remoto
   mergeRemoto(remoto) {
     if (!remoto) return;
-    const r = remoto.tiendas ? remoto : { tiendas: [], productos: [], precios: [] };
+    const r = remoto;
 
     const tiendas = new Map(this._data.tiendas.map(t => [t.id, t]));
     (r.tiendas || []).forEach(t => { if (!tiendas.has(t.id)) tiendas.set(t.id, t); });
@@ -518,6 +602,19 @@ const Shopping = {
     this._data.tiendas = [...tiendas.values()];
     this._data.productos = [...productos.values()];
     this._data.precios = [...precios.values()];
+
+    // productos a mano: unión por id (si está en los dos, gana el local)
+    const extras = { ...(this._data.extras || {}) };
+    for (const wk of Object.keys(r.extras || {})) {
+      const local = extras[wk] || { items: [] };
+      const items = new Map((local.items || []).map(i => [i.id, i]));
+      ((r.extras[wk] && r.extras[wk].items) || []).forEach(i => {
+        if (!items.has(i.id)) items.set(i.id, i);
+      });
+      extras[wk] = { ...(r.extras[wk] || {}), items: [...items.values()] };
+    }
+    this._data.extras = extras;
+
     this._save();
   },
 };

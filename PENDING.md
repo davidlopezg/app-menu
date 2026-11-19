@@ -1,3 +1,25 @@
+# PENDING — Sesión del 2026-11-19 (v47)
+
+## Productos a mano en la lista de la compra (issue #1)
+
+El issue #1 pedía la lista de productos "de todas las recetas sin repetirse,
+más fácil, **añadir productos** y precios". Faltaba una cosa: poder añadir
+productos que **no** salen de ninguna receta (papel de cocina, cerveza,
+limpieza...).
+
+- Botón **➕ Producto** en la lista de la compra → modal con nombre,
+  cantidad, categoría (o automática), precio y tienda (los tres últimos
+  opcionales).
+- Si el producto ya sale de una receta, **se suma a esa fila** (no sale
+  duplicado): "Pollo 1 kg" + "1 ud" → **"1 kg + 1 ud"**.
+- Los productos a mano se borran con el ✕ de la fila.
+- Si ya hay precio en el libro para ese producto, lo hereda (y si no, el
+  precio que pongas al añadirlo se guarda en el libro → total y reparto por
+  tienda funcionan solos).
+- Viven en el libro (`shopping:data` → `extras`) → **sincronizan con el
+  otro móvil** sin tocar Supabase.
+- `tests/shopping.test.js`: 45 tests (incluye un smoke del render).
+
 # PENDING — Sesión del 2026-11-10 (v46)
 
 ## Plan de preparación (v44 → v45)

@@ -28,6 +28,7 @@ const load = (file, varName) => {
   eval(src);
 };
 load('js/store.js', 'Store');
+load('js/translations.js', 'T');
 load('js/recipes.js', 'Recipes');
 load('js/menu.js', 'Menu');
 load('js/shopping.js', 'Shopping');
@@ -140,6 +141,71 @@ console.log('\n=== TEXTO PARA COPIAR ===');
 const texto = Shopping.textoLista(items2);
 check('el texto incluye el precio', texto.includes('7,50 €'));
 check('el texto incluye dónde comprar', texto.includes('Dónde comprar'));
+
+console.log('\n=== PRODUCTOS A MANO ===');
+const papel = Shopping.addManual({ nombre: 'Papel de cocina', cantidad: '2 ud', categoria: 'otros' });
+const items3 = Shopping.buildList();
+const item3 = nombre => items3.find(i => i.nombre.toLowerCase() === nombre.toLowerCase());
+check('el producto a mano aparece en la lista', !!item3('Papel de cocina'));
+check('con su cantidad', item3('Papel de cocina')?.cantidad === '2 ud', item3('Papel de cocina')?.cantidad);
+check('en la categoría elegida', item3('Papel de cocina')?.categoria === 'otros', item3('Papel de cocina')?.categoria);
+check('sin origen (no sale de ninguna receta)', Shopping._de(item3('Papel de cocina')) === '');
+
+Shopping.addManual({ nombre: 'Pollo', cantidad: '1 ud' });
+const items4 = Shopping.buildList();
+const pollo4 = items4.find(i => i.nombre.toLowerCase() === 'pollo');
+check('no se duplica: el pollo sigue siendo una sola fila', items4.filter(i => i.nombre.toLowerCase() === 'pollo').length === 1);
+check('la cantidad a mano se suma a la de la receta', pollo4?.cantidad === '1 kg + 1 ud', pollo4?.cantidad);
+check('el precio del libro sigue valiendo', pollo4?.precio === 7.5, String(pollo4?.precio));
+
+const mercadona2 = Shopping.getTiendas().find(t => t.nombre === 'Mercadona');
+Shopping.addManual({ nombre: 'Cerveza', cantidad: '6 ud', precio: 4.5, tiendaId: mercadona2.id });
+const items5 = Shopping.buildList();
+const cerveza5 = items5.find(i => i.nombre.toLowerCase() === 'cerveza');
+check('el producto a mano con precio muestra precio y tienda', cerveza5?.precio === 4.5 && cerveza5?.tienda?.nombre === 'Mercadona',
+  `${cerveza5?.precio} ${cerveza5?.tienda?.nombre}`);
+check('el total estimado lo incluye', Shopping.totalEstimado(items5) === 13.29, String(Shopping.totalEstimado(items5)));
+check('el reparto por tienda lo incluye', Shopping.porTienda(items5).some(g => g.items.some(i => i.nombre === 'Cerveza')));
+
+Shopping.removeManual(papel.id);
+const items6 = Shopping.buildList();
+check('al borrar desaparece de la lista', !items6.some(i => i.nombre === 'Papel de cocina'));
+
+console.log('\n=== SYNC DE PRODUCTOS A MANO ===');
+const fila = Shopping.toRow();
+check('la fila de la nube lleva los productos a mano', !!(fila.data.extras && fila.data.extras[Menu.getWeekKey()]));
+Shopping.mergeRemoto({ extras: { [Menu.getWeekKey()]: { items: [{ id: 'x-1', nombre: 'Detergente', cantidad: '1 ud', categoria: 'otros' }] } } });
+const items7 = Shopping.buildList();
+check('trae el producto a mano remoto', items7.some(i => i.nombre === 'Detergente'));
+check('no duplica al fusionar dos veces', Shopping.buildList().filter(i => i.nombre === 'Detergente').length === 1);
+Shopping.mergeRemoto({ extras: { [Menu.getWeekKey()]: { items: [{ id: 'x-1', nombre: 'Detergente', cantidad: '1 ud', categoria: 'otros' }] } } });
+check('la fusión repetida no duplica', Shopping.buildList().filter(i => i.nombre === 'Detergente').length === 1);
+
+console.log('\n=== RENDER (smoke) ===');
+document.body.innerHTML = `
+  <header><button id="btn-back"></button><h1 id="header-title"></h1><button id="btn-menu"></button></header>
+  <main id="main-content"></main>
+  <nav id="nav-tabs"><button class="nav-tab" data-view="menu"></button></nav>`;
+global.Components = {
+  escapeHtml: s => String(s ?? ''),
+  mealCell: () => '<div class="meal-cell"></div>',
+  toast: { show: () => {} },
+  modal: { open() {}, close() {} },
+};
+global.DB = { isAuth: () => false };
+global.Templates = { hasAny: () => false };
+global.AI = { hasKey: () => false };
+global.NutritionPanel = { render: () => '' };
+
+const appSrc = fs.readFileSync(`${ROOT}/js/app.js`, 'utf8').replace(/^const App =/m, 'global.App =');
+eval(appSrc.replace(/document.addEventListener\('DOMContentLoaded', \(\) => App\.init\(\)\);/, ''));
+
+App.renderShoppingView();
+const html = document.getElementById('main-content').innerHTML;
+check('la vista de la lista se renderiza', html.includes('shop-cat') && html.includes('shop-item'));
+check('hay un botón para añadir productos a mano', html.includes('App.openAddProductModal'));
+check('el producto a mano sale con su botón de borrar', html.includes('App.removeShoppingItem'));
+check('el producto a mano dice que lo agregaste a mano', html.includes('añadido a mano'));
 
 const failed = results.filter(r => !r).length;
 console.log(`\n${results.length - failed}/${results.length} tests OK`);
