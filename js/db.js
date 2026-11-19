@@ -430,6 +430,7 @@ const DB = {
         productos: data.productos || [],
         precios: data.precios || [],
         extras: data.extras || {},   // productos añadidos a mano, por semana
+        tickets: data.tickets || [], // registros de compra (tickets)
       },
       updated_at: new Date().toISOString(),
     };

@@ -229,6 +229,59 @@ check('no duplica al fusionar dos veces', Shopping.buildList().filter(i => i.nom
 Shopping.mergeRemoto({ extras: { [Menu.getWeekKey()]: { items: [{ id: 'x-1', nombre: 'Detergente', cantidad: '1 ud', categoria: 'otros' }] } } });
 check('la fusión repetida no duplica', Shopping.buildList().filter(i => i.nombre === 'Detergente').length === 1);
 
+console.log('\n=== TICKETS (registros de compra) ===');
+const mercadona3 = Shopping.getTiendas().find(t => t.nombre === 'Mercadona');
+const lidl3 = Shopping.getTiendas().find(t => t.nombre === 'Lidl');
+
+// ticket con 2 líneas: una con producto del libro y otra nueva
+const ticket = Shopping.addTicket({
+  fecha: '2026-11-19',
+  tiendaId: mercadona3.id,
+  tiendaNombre: 'Mercadona',
+  lineas: [
+    { descripcion: 'POLLO ENTERO 1KG', cantidad: '1', precioTotal: '6,99', ingrediente: 'Pollo', precioGuardado: true },
+    { descripcion: 'PATATAS 1KG', cantidad: '2', precioTotal: '2,58', ingrediente: 'Patatas', precioGuardado: true },
+  ],
+  total: '9,57',
+  marcarComprado: true,
+});
+
+check('el ticket se guarda', !!Shopping.getTicket(ticket.id));
+check('con sus 2 líneas', ticket.lineas.length === 2);
+check('el total es el del ticket', Shopping.ticketTotal(ticket) === 9.57, String(Shopping.ticketTotal(ticket)));
+check('la fecha se guarda', ticket.fecha === '2026-11-19');
+check('la tienda se guarda', ticket.tiendaNombre === 'Mercadona');
+check('el precio con coma se entiende (6,99 → 6.99)', ticket.lineas[0].precioTotal === 6.99, String(ticket.lineas[0].precioTotal));
+
+// el precio del ticket va al libro de precios
+const precioPollo = Shopping.getPreciosDe(ticket.lineas[0].productoId).find(p => p.tiendaId === mercadona3.id);
+check('el precio del ticket se guarda en el libro (Mercadona 6,99)', precioPollo?.precio === 6.99, String(precioPollo?.precio));
+const precioPatatas = Shopping.getPreciosDe(ticket.lineas[1].productoId).find(p => p.tiendaId === mercadona3.id);
+check('y el de las patatas también (2,58)', precioPatatas?.precio === 2.58, String(precioPatatas?.precio));
+check('el producto se crea con el nombre del ticket', Shopping.getProductosDe('Patatas').some(p => p.nombre === 'Patatas 1kg'),
+  Shopping.getProductosDe('Patatas').map(p => p.nombre).join(' | '));
+check('el precio más barato sigue siendo el de Dia (1,29)', Shopping.mejorPrecio('Patatas')?.precio === 1.29,
+  String(Shopping.mejorPrecio('Patatas')?.precio));
+
+// marcar como comprado
+check('marca como comprado lo que coincide con la lista', Shopping.isComprado(Shopping._norm('pollo')),
+  Shopping.buildList().filter(i => i.comprado).map(i => i.nombre).join(', '));
+
+// gasto del mes
+check('el gasto del mes suma el ticket', Shopping.gastoDelMes('2026-11') === 9.57, String(Shopping.gastoDelMes('2026-11')));
+check('otro mes no suma', Shopping.gastoDelMes('2026-10') === 0);
+
+// sync
+const filaT = Shopping.toRow();
+check('la fila de la nube lleva los tickets', (filaT.data.tickets || []).length === 1);
+Shopping.mergeRemoto({ tickets: [{ id: 'tk-remoto', fecha: '2026-11-18', tiendaNombre: 'Lidl', lineas: [], total: 12 }] });
+check('trae el ticket remoto', Shopping.getTickets().length === 2);
+Shopping.mergeRemoto({ tickets: [{ id: 'tk-remoto', fecha: '2026-11-18', tiendaNombre: 'Lidl', lineas: [], total: 12 }] });
+check('la fusión repetida no duplica tickets', Shopping.getTickets().length === 2, String(Shopping.getTickets().length));
+
+Shopping.removeTicket(ticket.id);
+check('al borrar el ticket desaparece', Shopping.getTickets().length === 1);
+
 console.log('\n=== RENDER (smoke) ===');
 document.body.innerHTML = `
   <header><button id="btn-back"></button><h1 id="header-title"></h1><button id="btn-menu"></button></header>
@@ -254,6 +307,13 @@ check('la vista de la lista se renderiza', html.includes('shop-cat') && html.inc
 check('hay un botón para añadir productos a mano', html.includes('App.openAddProductModal'));
 check('el producto a mano sale con su botón de borrar', html.includes('App.removeShoppingItem'));
 check('el producto a mano dice que lo agregaste a mano', html.includes('añadido a mano'));
+
+App.renderTicketsView();
+const tHtml = document.getElementById('main-content').innerHTML;
+check('la vista de tickets se renderiza', tHtml.includes('🧾'), tHtml.slice(0, 80));
+check('tiene el botón de escanear ticket', tHtml.includes('App.openScanTicketModal'));
+check('lista los tickets guardados', tHtml.includes('Lidl'), tHtml.replace(/<[^>]+>/g, ' ').slice(0, 120));
+check('muestra el gasto del mes', tHtml.includes('este mes'));
 
 const failed = results.filter(r => !r).length;
 console.log(`\n${results.length - failed}/${results.length} tests OK`);

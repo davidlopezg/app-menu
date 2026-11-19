@@ -2023,6 +2023,36 @@ select.form-input {
 }
 
 /* ============================================
+   Tickets (registros de compra)
+   ============================================ */
+.tk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-xs);
+}
+
+.tk-table th {
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  padding: 4px 2px;
+  font-weight: 600;
+}
+
+.tk-table td {
+  padding: 2px;
+  vertical-align: middle;
+}
+
+.tk-table .form-input {
+  padding: 6px 8px;
+  font-size: var(--font-size-xs);
+  width: 100%;
+}
+
+/* ============================================
    Plan de preparación
    ============================================ */
 /* Mismo formato que las categorías de la lista de la compra:

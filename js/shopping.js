@@ -62,6 +62,7 @@ const Shopping = {
     this._data.productos = this._data.productos || [];
     this._data.precios = this._data.precios || [];
     this._data.extras = this._data.extras || {};   // productos a mano, por semana
+    this._data.tickets = this._data.tickets || []; // registros de compra
     this._aliasMap = null;
 
     // Tiendas por defecto solo si no hay ninguna
@@ -317,6 +318,105 @@ const Shopping = {
     if (w.includes(' ')) return n.includes(w);
     const esc = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return new RegExp(`\\b${esc}(s|es)?\\b`).test(n);
+  },
+
+  // ------------------------------------------------------------
+  // Tickets (registros de compra)
+  // ------------------------------------------------------------
+  // Lo que se compró, en qué tienda y a qué precio. El ticket es la fuente
+  // de verdad del libro de precios: cada línea puede guardar su precio en
+  // la tienda del ticket.
+  getTickets() {
+    return (this._data.tickets || []).slice()
+      .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
+  },
+
+  getTicket(id) {
+    return (this._data.tickets || []).find(t => t.id === id) || null;
+  },
+
+  ticketTotal(ticket) {
+    if (!ticket) return 0;
+    if (ticket.total !== null && ticket.total !== undefined) return parseFloat(ticket.total) || 0;
+    return (ticket.lineas || []).reduce((a, l) => a + (parseFloat(l.precioTotal) || 0), 0);
+  },
+
+  // Gasto del mes (YYYY-MM)
+  gastoDelMes(mes) {
+    const m = mes || new Date().toISOString().slice(0, 7);
+    return this.getTickets()
+      .filter(t => String(t.fecha || '').startsWith(m))
+      .reduce((a, t) => a + this.ticketTotal(t), 0);
+  },
+
+  // Guarda un ticket: registra la compra, actualiza el libro de precios y
+  // (opcionalmente) marca como comprado lo de la lista de esta semana.
+  addTicket({ fecha, tiendaId, tiendaNombre, lineas, total, marcarComprado = true }) {
+    const lineasLimpias = (lineas || [])
+      .map(l => ({
+        descripcion: String(l.descripcion || '').trim(),
+        cantidad: l.cantidad === '' || l.cantidad === null || l.cantidad === undefined ? null : l.cantidad,
+        precioUnit: this._num(l.precioUnit),
+        precioTotal: this._num(l.precioTotal),
+        ingrediente: l.ingrediente || null,
+        productoId: l.productoId || null,
+        precioGuardado: !!l.precioGuardado,
+      }))
+      .filter(l => l.descripcion);
+
+    const ticket = {
+      id: Store.uuid(),
+      fecha: fecha || new Date().toISOString().slice(0, 10),
+      tiendaId: tiendaId || null,
+      tiendaNombre: tiendaNombre || '',
+      lineas: lineasLimpias,
+      total: this._num(total) ?? lineasLimpias.reduce((a, l) => a + (l.precioTotal || 0), 0),
+      creado: new Date().toISOString(),
+    };
+
+    // 1) el precio del ticket va al libro de precios (producto + tienda)
+    for (const l of ticket.lineas) {
+      if (!l.precioGuardado || !l.ingrediente || !ticket.tiendaId || l.precioTotal === null) continue;
+      if (!l.productoId) {
+        // el producto del libro: si ya existe para ese ingrediente, se usa;
+        // si no, se crea con el nombre que dice el ticket
+        const existentes = this.getProductosDe(l.ingrediente);
+        const producto = existentes.length
+          ? existentes[0]
+          : this.ensureProducto({ ingrediente: l.ingrediente, nombre: this._tituloNombre(l.descripcion) });
+        l.productoId = producto.id;
+      }
+      this.setPrecio(l.productoId, ticket.tiendaId, l.precioTotal);
+    }
+
+    // 2) marcar como comprado lo que coincide con la lista de esta semana
+    if (marcarComprado) {
+      const items = this.buildList();
+      for (const l of ticket.lineas) {
+        if (!l.ingrediente) continue;
+        const key = this._norm(this._canon(l.ingrediente));
+        const item = items.find(i => i.key === key);
+        if (item && !item.comprado) this.toggleComprado(key);
+      }
+    }
+
+    this._data.tickets = this._data.tickets || [];
+    this._data.tickets.push(ticket);
+    this._save();
+    return ticket;
+  },
+
+  removeTicket(id) {
+    this._data.tickets = (this._data.tickets || []).filter(t => t.id !== id);
+    this._save();
+  },
+
+  // "PATATAS 1KG" → "Patatas 1kg" (nombre del producto en el libro)
+  _tituloNombre(desc) {
+    return String(desc || '')
+      .toLowerCase()
+      .replace(/\b[a-záéíóúñ]/g, c => c.toUpperCase())
+      .replace(/\b(de|del|la|el|los|las|y|con)\b/g, m => m.toLowerCase());
   },
 
   // ------------------------------------------------------------
@@ -682,6 +782,7 @@ const Shopping = {
         productos: this._data.productos,
         precios: this._data.precios,
         extras: this._data.extras,
+        tickets: this._data.tickets,
       },
       updated_at: new Date().toISOString(),
     };
@@ -719,6 +820,11 @@ const Shopping = {
       extras[wk] = { ...(r.extras[wk] || {}), items: [...items.values()] };
     }
     this._data.extras = extras;
+
+    // tickets: unión por id (si está en los dos, gana el local)
+    const tickets = new Map((this._data.tickets || []).map(t => [t.id, t]));
+    (r.tickets || []).forEach(t => { if (!tickets.has(t.id)) tickets.set(t.id, t); });
+    this._data.tickets = [...tickets.values()];
 
     this._save();
   },

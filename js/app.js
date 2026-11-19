@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v48 (2026-11-19)',
+  VERSION: 'v49 (2026-11-19)',
 
   // ============================================
   // Initialize
@@ -134,6 +134,9 @@ const App = {
       case 'shopping':
         this.renderShoppingView();
         break;
+      case 'tickets':
+        this.renderTicketsView();
+        break;
       case 'prep':
         this.renderPrepView();
         break;
@@ -163,6 +166,9 @@ const App = {
         break;
       case 'shopping':
         window.location.hash = 'shopping';
+        break;
+      case 'tickets':
+        window.location.hash = 'tickets';
         break;
       case 'prep':
         window.location.hash = 'prep';
@@ -927,6 +933,9 @@ const App = {
         <button class="btn btn--secondary btn--full" onclick="Components.modal.close(); App.navigate('prep');">
           🍳 ${T.menu.prepPlan}
         </button>
+        <button class="btn btn--secondary btn--full" onclick="Components.modal.close(); App.navigate('tickets');">
+          🧾 Tickets de compra
+        </button>
         <button class="btn btn--secondary btn--full" onclick="Components.modal.close(); App.navigate('template', {});">
           ${tplLabel}
         </button>
@@ -1017,8 +1026,13 @@ const App = {
           <button class="btn btn--outline btn--sm" onclick="App.copyShoppingList()">📋 Copiar</button>
           <button class="btn btn--outline btn--sm" onclick="App.showStoresModal()">🏪 Tiendas</button>
           <button class="btn btn--outline btn--sm" onclick="App.showStoresByShop()">🗺️ Dónde comprar</button>
+          <button class="btn btn--outline btn--sm" onclick="App.openScanTicketModal()">📸 Ticket</button>
         </div>
       </div>
+
+      <button class="btn btn--ghost btn--full" style="margin-bottom: 12px;" onclick="App.navigate('tickets')">
+        🧾 Tickets de compra${Shopping.getTickets().length ? ` (${Shopping.getTickets().length})` : ''}
+      </button>
     `;
 
     for (const [cat, lista] of porCat) {
@@ -1337,6 +1351,418 @@ const App = {
       </p>
       ${html || '<p>No hay nada en la lista.</p>'}
     `);
+  },
+
+  // ============================================
+  // View: Tickets (registros de compra)
+  // ============================================
+  renderTicketsView() {
+    this.currentView = 'tickets';
+    this._updateNav(null);
+    this._updateHeader('🧾 Tickets de compra', true);
+
+    const main = document.getElementById('main-content');
+    const tickets = Shopping.getTickets();
+    const gastoMes = Shopping.gastoDelMes();
+
+    let html = `
+      <div class="card shop-summary">
+        <div class="shop-summary__row">
+          <span>🧾 <strong>${tickets.length}</strong> tickets</span>
+          <span>💶 <strong>${Shopping._precio(gastoMes)}</strong> este mes</span>
+        </div>
+        <div class="shop-summary__actions">
+          <button class="btn btn--primary btn--sm" onclick="App.openScanTicketModal()">📸 Escanear ticket</button>
+        </div>
+      </div>`;
+
+    if (!tickets.length) {
+      html += `
+        <div class="signin-view" style="padding: 24px 16px;">
+          <div class="signin-card">
+            <div class="signin-card__icon">🧾</div>
+            <h2 class="signin-card__title">Todavía no hay tickets</h2>
+            <p class="signin-card__hint">Hacé una foto del ticket y te armo el registro con
+              todo lo que compraste y los precios por tienda.</p>
+          </div>
+        </div>`;
+    } else {
+      html += '<ul class="shop-items">';
+      for (const t of tickets) {
+        const n = (t.lineas || []).length;
+        html += `
+          <li class="shop-item" onclick="App.showTicketDetail('${t.id}')" style="cursor: pointer;">
+            <div class="shop-item__body">
+              <div class="shop-item__name">${Components.escapeHtml(t.tiendaNombre || 'Sin tienda')}</div>
+              <div class="shop-item__meta">
+                <span class="shop-item__qty">${Components.escapeHtml(t.fecha || '')}</span>
+                <span>${n} ${n === 1 ? 'artículo' : 'artículos'}</span>
+              </div>
+            </div>
+            <div class="shop-item__price">${Shopping._precio(Shopping.ticketTotal(t))}</div>
+          </li>`;
+      }
+      html += '</ul>';
+    }
+
+    html += this._renderFooter();
+    main.innerHTML = html;
+  },
+
+  showTicketDetail(id) {
+    const t = Shopping.getTicket(id);
+    if (!t) return;
+    const lineas = (t.lineas || []).map(l => `
+      <li class="shop-item">
+        <div class="shop-item__body">
+          <div class="shop-item__name">${Components.escapeHtml(l.descripcion)}</div>
+          <div class="shop-item__meta">
+            ${l.cantidad !== null && l.cantidad !== undefined ? `<span class="shop-item__qty">${Components.escapeHtml(l.cantidad)}</span>` : ''}
+            ${l.precioTotal !== null && l.precioTotal !== undefined ? `<span class="shop-item__price">${Shopping._precio(l.precioTotal)}</span>` : ''}
+            ${l.ingrediente ? `<span>${Components.escapeHtml(l.ingrediente)}</span>` : ''}
+          </div>
+        </div>
+      </li>`).join('');
+
+    Components.modal.open('🧾 Ticket', `
+      <p style="color: var(--color-text-muted); font-size: 13px; margin-bottom: 12px;">
+        ${Components.escapeHtml(t.fecha || '')} · ${Components.escapeHtml(t.tiendaNombre || 'sin tienda')} ·
+        total <strong>${Shopping._precio(Shopping.ticketTotal(t))}</strong>
+      </p>
+      <ul class="shop-items">${lineas || '<li class="shop-item"><div class="shop-item__body">Sin líneas</div></li>'}</ul>
+      <div style="display: flex; gap: 8px; margin-top: 16px;">
+        <button class="btn btn--ghost" onclick="App.removeTicket('${t.id}')">🗑️ Borrar</button>
+        <button class="btn btn--ghost" style="flex:1;" onclick="Components.modal.close()">Cerrar</button>
+      </div>
+    `);
+  },
+
+  removeTicket(id) {
+    if (!confirm('¿Borrar este ticket?')) return;
+    Shopping.removeTicket(id);
+    Components.modal.close();
+    Components.toast.show('🗑️ Ticket borrado');
+    this.renderTicketsView();
+  },
+
+  // ============================================
+  // Tickets: escanear → revisar → guardar
+  // ============================================
+  openScanTicketModal() {
+    const tiendas = Shopping.getTiendas();
+    Components.modal.open('📸 Escanear ticket', `
+      <p style="color: var(--color-text-muted); font-size: 13px; margin-bottom: 12px;">
+        Hacé 1 o 2 fotos del ticket. La foto se lee con la IA y te traigo las líneas
+        para que las revises antes de guardar. <b>Las fotos no se guardan.</b>
+      </p>
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Tienda (opcional)</label>
+      <select id="tk-tienda" class="form-input" style="margin-bottom: 12px;">
+        <option value="">— la del ticket —</option>
+        ${tiendas.map(t => `<option value="${t.id}">${Components.escapeHtml(t.nombre)}</option>`).join('')}
+      </select>
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Foto 1</label>
+      <input type="file" accept="image/*" capture="environment" id="tk-foto1" class="form-input"
+             onchange="App.previewTicketPhoto(1)">
+      <div id="tk-prev1" style="margin: 6px 0 12px;"></div>
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Foto 2 (si el ticket es largo)</label>
+      <input type="file" accept="image/*" capture="environment" id="tk-foto2" class="form-input"
+             onchange="App.previewTicketPhoto(2)">
+      <div id="tk-prev2" style="margin: 6px 0 16px;"></div>
+
+      <button class="btn btn--primary btn--full" style="margin-bottom: 8px;" onclick="App.readTicketPhotos()">
+        🔍 Leer el ticket
+      </button>
+      <button class="btn btn--ghost btn--full" onclick="Components.modal.close(); App.openManualTicketModal();">
+        ✍️ Escribir las líneas a mano
+      </button>
+    `);
+  },
+
+  previewTicketPhoto(n) {
+    const file = document.getElementById(`tk-foto${n}`)?.files?.[0];
+    const box = document.getElementById(`tk-prev${n}`);
+    if (!file || !box) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      box.innerHTML = `<img src="${e.target.result}" style="max-width:100%;max-height:180px;border-radius:8px;">`;
+    };
+    reader.readAsDataURL(file);
+  },
+
+  // Redimensiona la foto antes de mandarla a la IA (una foto de móvil pesa
+  // 3-5 MB y la IA tarda muchísimo).
+  _resizeImage(file, max = 1400, quality = 0.72) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = reject;
+        img.onload = () => {
+          const escala = Math.min(1, max / Math.max(img.width, img.height));
+          const w = Math.round(img.width * escala);
+          const h = Math.round(img.height * escala);
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  },
+
+  // Catálogo + tiendas que se le pasan a la IA para que mapee las líneas.
+  _ticketContext() {
+    const ingredientes = new Map();
+    for (const r of Recipes.getAll()) {
+      for (const ing of (r.ingredientes || [])) {
+        const key = Shopping._norm(Shopping._canon(ing.nombre));
+        if (key && !ingredientes.has(key)) ingredientes.set(key, Shopping._labelDe(ing.nombre));
+      }
+    }
+    return {
+      tiendas: Shopping.getTiendas().map(t => t.nombre),
+      ingredientes: [...ingredientes.values()].sort((a, b) => a.localeCompare(b, 'es')),
+      productos: Shopping.getProductos().map(p => `${p.nombre} [${Shopping._labelDe(p.ingrediente)}]`),
+    };
+  },
+
+  async readTicketPhotos() {
+    if (!AI.hasKey()) {
+      Components.toast.show('⚠️ Configurá tu API key en Ajustes → 🤖 (hace falta un modelo que lea imágenes)', 5000);
+      return;
+    }
+    const files = [
+      document.getElementById('tk-foto1')?.files?.[0],
+      document.getElementById('tk-foto2')?.files?.[0],
+    ].filter(Boolean);
+    if (!files.length) { Components.toast.show('⚠️ Elegí al menos una foto'); return; }
+
+    Components.toast.show('📖 Leyendo el ticket…', 12000);
+    try {
+      const imgs = [];
+      for (const f of files) imgs.push(await this._resizeImage(f));
+      const data = await AI.readTicket(imgs, this._ticketContext());
+      if (!data || data.error) {
+        Components.toast.show('❌ ' + ((data && data.error) || 'No pude leer el ticket'), 5000);
+        return;
+      }
+      Components.modal.close();
+      this.openTicketReview(this._normalizeTicket(data));
+    } catch (err) {
+      console.error('[ticket] error', err);
+      const msg = String(err?.message || err);
+      Components.toast.show(
+        /imagen|image|vision|content type|unsupported/i.test(msg)
+          ? '❌ Tu modelo no lee imágenes. Cambiá el modelo en Ajustes → 🤖'
+          : '❌ ' + msg.slice(0, 110),
+        6000
+      );
+    }
+  },
+
+  _normalizeTicket(data) {
+    const lineas = (data.lineas || []).map(l => ({
+      descripcion: String(l.descripcion || '').trim(),
+      cantidad: l.cantidad ?? '',
+      precioUnit: l.precio_unit ?? l.precioUnit ?? '',
+      precioTotal: l.precio_total ?? l.precioTotal ?? '',
+      ingrediente: l.ingrediente || '',
+    })).filter(l => l.descripcion);
+    const total = data.total ?? lineas.reduce((a, l) => a + (parseFloat(l.precioTotal) || 0), 0);
+    return {
+      fecha: /^\d{4}-\d{2}-\d{2}$/.test(data.fecha || '') ? data.fecha : new Date().toISOString().slice(0, 10),
+      tienda: String(data.tienda || '').trim(),
+      total,
+      lineas,
+    };
+  },
+
+  openTicketReview(data) {
+    const tiendas = Shopping.getTiendas();
+    const tiendaId = tiendas.find(t => Shopping._norm(t.nombre) === Shopping._norm(data.tienda))?.id || '';
+    const ctx = this._ticketContext();
+
+    const filas = data.lineas.map((l, i) => `
+      <tr data-i="${i}">
+        <td><input class="form-input" id="tk-l-desc-${i}" value="${Components.escapeHtml(l.descripcion)}"></td>
+        <td><input class="form-input" id="tk-l-cant-${i}" value="${Components.escapeHtml(l.cantidad)}"
+                   inputmode="decimal" style="width:48px;text-align:center"></td>
+        <td><input class="form-input" id="tk-l-pt-${i}" value="${Components.escapeHtml(l.precioTotal)}"
+                   inputmode="decimal" style="width:64px;text-align:right"></td>
+        <td><input class="form-input" list="tk-ingredientes" id="tk-l-ing-${i}"
+                   value="${Components.escapeHtml(l.ingrediente)}" placeholder="producto"></td>
+        <td style="text-align:center"><input type="checkbox" id="tk-l-guardar-${i}"
+                   ${l.ingrediente ? 'checked' : ''} aria-label="Guardar el precio"></td>
+      </tr>`).join('');
+
+    Components.modal.open('🧾 Revisá el ticket', `
+      <p style="color: var(--color-text-muted); font-size: 13px; margin-bottom: 12px;">
+        Revisá las líneas. Donde dejes el producto, su precio se guarda en el libro
+        para esa tienda (y la lista de la compra lo toma).
+      </p>
+
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <div style="flex:1;">
+          <label style="font-size: 13px; color: var(--color-text-muted);">Fecha</label>
+          <input type="date" id="tk-fecha" class="form-input" value="${data.fecha}">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size: 13px; color: var(--color-text-muted);">Tienda</label>
+          <select id="tk-tienda-sel" class="form-input">
+            <option value="">— otra —</option>
+            ${tiendas.map(t => `<option value="${t.id}" ${t.id === tiendaId ? 'selected' : ''}>${Components.escapeHtml(t.nombre)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <input type="text" id="tk-tienda-nombre" class="form-input" style="margin-bottom:12px;"
+             placeholder="Tienda del ticket" value="${Components.escapeHtml(tiendaId ? '' : data.tienda)}">
+
+      <table class="tk-table">
+        <thead>
+          <tr><th>Artículo</th><th>Cant</th><th>€</th><th>Producto</th><th>💰</th></tr>
+        </thead>
+        <tbody id="tk-lineas">${filas}</tbody>
+      </table>
+
+      <datalist id="tk-ingredientes">
+        ${ctx.ingredientes.map(i => `<option value="${Components.escapeHtml(i)}"></option>`).join('')}
+      </datalist>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        <label style="font-size:13px;color:var(--color-text-muted);">Total</label>
+        <input type="number" id="tk-total" class="form-input" step="0.01" inputmode="decimal"
+               value="${data.total}" style="width:96px;">
+        <label style="font-size:13px;color:var(--color-text-muted);display:flex;align-items:center;gap:6px;">
+          <input type="checkbox" id="tk-marcar" checked> Marcar comprado en la lista
+        </label>
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-top: 16px;">
+        <button class="btn btn--primary" style="flex:1;" onclick="App.saveTicket()">Guardar ticket</button>
+        <button class="btn btn--ghost" onclick="Components.modal.close()">Cancelar</button>
+      </div>
+    `);
+  },
+
+  // "PATATAS 1KG" → "Patatas 1kg" (nombre del producto en el libro)
+  _tituloTicket(desc) {
+    return Shopping._tituloNombre(desc);
+  },
+
+  saveTicket() {
+    const fecha = document.getElementById('tk-fecha')?.value;
+    const tiendaId = document.getElementById('tk-tienda-sel')?.value || null;
+    const tiendaNombre = (document.getElementById('tk-tienda-nombre')?.value || '').trim();
+    const total = document.getElementById('tk-total')?.value;
+    const marcar = document.getElementById('tk-marcar')?.checked !== false;
+
+    const lineas = [...document.querySelectorAll('#tk-lineas tr')].map(tr => {
+      const i = tr.getAttribute('data-i');
+      return {
+        descripcion: (document.getElementById(`tk-l-desc-${i}`)?.value || '').trim(),
+        cantidad: document.getElementById(`tk-l-cant-${i}`)?.value || '',
+        precioTotal: document.getElementById(`tk-l-pt-${i}`)?.value || '',
+        ingrediente: (document.getElementById(`tk-l-ing-${i}`)?.value || '').trim(),
+        precioGuardado: document.getElementById(`tk-l-guardar-${i}`)?.checked === true,
+      };
+    }).filter(l => l.descripcion);
+
+    if (!lineas.length) { Components.toast.show('⚠️ El ticket no tiene líneas'); return; }
+
+    // la tienda: la elegida o la que dice el ticket (se crea si no existe)
+    let tid = tiendaId;
+    let tname = tiendaNombre;
+    if (!tid) {
+      if (!tname) { Components.toast.show('⚠️ Elegí la tienda'); return; }
+      const existente = Shopping.getTiendas().find(t => Shopping._norm(t.nombre) === Shopping._norm(tname));
+      tid = existente ? existente.id : Shopping.addTienda({ nombre: tname }).id;
+      tname = Shopping.getTienda(tid)?.nombre || tname;
+    }
+
+    // el precio del ticket va al libro de precios (lo resuelve Shopping.addTicket:
+    // si el producto no existe, lo crea con el nombre de la línea)
+    Shopping.addTicket({ fecha, tiendaId: tid, tiendaNombre: tname, lineas, total, marcarComprado: marcar });
+    Components.modal.close();
+    Components.toast.show(`🧾 Ticket guardado · ${Shopping._precio(parseFloat(total) || 0)}`);
+    this.renderTicketsView();
+  },
+
+  // ============================================
+  // Ticket a mano (sin foto)
+  // ============================================
+  openManualTicketModal() {
+    Components.modal.open('✍️ Ticket a mano', `
+      <label style="font-size: 13px; color: var(--color-text-muted);">Tienda</label>
+      <input type="text" id="tm-tienda" class="form-input" placeholder="Ej: Mercadona" style="margin-bottom:12px;">
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Fecha</label>
+      <input type="date" id="tm-fecha" class="form-input"
+             value="${new Date().toISOString().slice(0, 10)}" style="margin-bottom:12px;">
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">
+        Líneas — una por renglón: <b>artículo | cantidad | precio</b>
+      </label>
+      <textarea id="tm-lineas" class="form-input" rows="8"
+        placeholder="Patatas 1kg | 1 | 1,29&#10;Leche | 2 | 1,10&#10;Aceite de oliva | 1 | 6,50"></textarea>
+
+      <label style="font-size: 13px; color: var(--color-text-muted); margin-top:12px;">Total (opcional)</label>
+      <input type="number" id="tm-total" class="form-input" step="0.01" inputmode="decimal"
+             style="margin-bottom:12px;">
+
+      <label style="font-size:13px;color:var(--color-text-muted);display:flex;align-items:center;gap:6px;margin-bottom:16px;">
+        <input type="checkbox" id="tm-marcar" checked> Marcar comprado en la lista
+      </label>
+
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn--primary" style="flex:1;" onclick="App.saveManualTicket()">Guardar ticket</button>
+        <button class="btn btn--ghost" onclick="Components.modal.close()">Cancelar</button>
+      </div>
+    `);
+  },
+
+  saveManualTicket() {
+    const tiendaNombre = (document.getElementById('tm-tienda')?.value || '').trim();
+    const fecha = document.getElementById('tm-fecha')?.value;
+    const total = document.getElementById('tm-total')?.value;
+    const marcar = document.getElementById('tm-marcar')?.checked !== false;
+    const crudo = document.getElementById('tm-lineas')?.value || '';
+
+    const lineas = crudo.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+      const partes = l.split('|').map(p => p.trim());
+      return {
+        descripcion: partes[0] || '',
+        cantidad: partes[1] || '',
+        precioTotal: partes[2] || '',
+        ingrediente: '',
+        precioGuardado: false,
+      };
+    }).filter(l => l.descripcion);
+
+    if (!lineas.length) { Components.toast.show('⚠️ Escribí al menos una línea'); return; }
+    if (!tiendaNombre) { Components.toast.show('⚠️ Escribí la tienda'); return; }
+
+    const existente = Shopping.getTiendas().find(t => Shopping._norm(t.nombre) === Shopping._norm(tiendaNombre));
+    const tienda = existente || Shopping.addTienda({ nombre: tiendaNombre });
+
+    Shopping.addTicket({
+      fecha,
+      tiendaId: tienda.id,
+      tiendaNombre: tienda.nombre,
+      lineas,
+      total: total !== '' && total !== undefined ? total : null,
+      marcarComprado: marcar,
+    });
+
+    Components.modal.close();
+    Components.toast.show('🧾 Ticket guardado');
+    this.renderTicketsView();
   },
 
   // ============================================

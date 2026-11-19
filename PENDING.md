@@ -1,3 +1,38 @@
+# PENDING — Sesión del 2026-11-19 (v49)
+
+## Tickets: foto del tiquet → registro de compra + precios por supermercado
+
+- **📸 Escanear ticket**: 1 o 2 fotos del ticket (si es largo, dos partes).
+  La foto se redimensiona en el móvil (máx. 1400 px, JPEG 0.72) antes de
+  mandarse → pesa poco y la IA tarda mucho menos. **Las fotos no se guardan.**
+- **La IA lee el ticket** (`js/ai.js`: `readTicket()`): se le mandan las fotos en
+  formato multimodal (`image_url`) con el catálogo de ingredientes y las
+  tiendas/produtos del libro, y devuelve JSON con tienda, fecha, total y
+  líneas. El prompt está en `systemPromptTicket`.
+- **Antes de guardar nada** se muestra la **revisión**: fecha, tienda, y una
+  tabla editable con artículo / cantidad / precio / **producto** (con
+  autocompletado del catálogo) y un check 💰 por línea (si el precio se
+  guarda en el libro). Editable todo: si la IA leyó mal algo, se corrige.
+- **Al guardar**:
+  - se crea el **registro de ticket** (`Shopping.addTicket`): fecha, tienda,
+    líneas, total. Va en la fila `shopping:data` → **sincroniza** con el otro
+    móvil (sin tablas nuevas).
+  - cada línea marcada actualiza el **libro de precios** con el precio de esa
+    tienda → la lista de la compra ya estima el coste real y el "🗺️ Dónde
+    comprar" reparte por tienda.
+  - opcionalmente **marca como comprado** lo de la lista de esta semana que
+    coincide con el ticket.
+- **🧾 Vista de tickets**: historial (fecha, tienda, nº de artículos, total),
+  gasto del mes y el detalle de cada ticket. Entrada desde la lista de la
+  compra ("📸 Ticket" / "🧾 Tickets") y desde el menú ☰.
+- **✍️ Ticket a mano**: si no hay foto (o no hay IA), se escriben las líneas
+  como `artículo | cantidad | precio`.
+- Si el modelo de IA no acepta imágenes, avisa y te manda a Ajustes → 🤖.
+
+`tests/shopping.test.js`: 77 tests · `tests/ai-ticket.test.js`: 11 tests
+(contrato con la API: que las 2 fotos vayan en multimodal y que la respuesta
+se parsee).
+
 # PENDING — Sesión del 2026-11-19 (v48)
 
 ## La lista de la compra, cazada contra el catálogo real (issue #1)

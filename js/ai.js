@@ -173,6 +173,34 @@ Otras reglas:
 - No inventes datos, analizá SOLO lo que te paso. Si una comida está vacía, mencionala.
 - Respondé en español, tuteando.`,
 
+  // Lector de tickets: recibe 1-2 fotos de un ticket y devuelve las líneas.
+  systemPromptTicket: `Sos un lector de tickets de compra de supermercados.
+
+Recibés 1 o 2 fotos de un ticket (si hay 2, son dos partes del MISMO ticket: juntalas en un solo ticket) y devolvés SOLO un objeto JSON válido, sin markdown y sin explicaciones, con esta estructura exacta:
+
+{
+  "tienda": "Nombre de la tienda tal como aparece en el ticket",
+  "fecha": "YYYY-MM-DD",
+  "total": 87.40,
+  "lineas": [
+    {
+      "descripcion": "El artículo tal como está escrito en el ticket",
+      "cantidad": 1,
+      "precio_unit": 1.29,
+      "precio_total": 1.29,
+      "ingrediente": "Nombre del ingrediente del catálogo, o null si no reconocés ninguno"
+    }
+  ]
+}
+
+Reglas:
+- "total" es el importe FINAL a pagar (buscá "TOTAL", "TOTAL A PAGAR", "IMPORTE"). Si hay descuento, redondeo o pago con tarjeta, no lo inventes.
+- Las líneas que NO son artículos (subtotales, IVA, forma de pago, cambio, puntos, tarjetas) NO van como líneas.
+- "cantidad", "precio_unit" y "precio_total" son NÚMEROS (sin € ni comas). Si no se ve el precio de una línea, pon null.
+- Si el artículo sale como "6 x 0,99", pon cantidad 6, precio_unit 0.99 y precio_total 5.94.
+- "ingrediente": elegí el más cercano del catálogo que te paso. Si dudás, null (es preferible null que inventar).
+- Si la foto está borrosa, tapada o no es un ticket, devolvé {"error": "No se lee el ticket"} y nada más.`,
+
   // Estado
   key: '',
   endpoint: '',
@@ -219,6 +247,38 @@ Otras reglas:
 
   hasKey() {
     return !!this.key && !!this.endpoint && !!this.model;
+  },
+
+  // ============================================
+  // Helpers
+  // ============================================
+  // Analiza 1-2 fotos de un ticket de compra y devuelve sus líneas.
+  // Las fotos van como data URL (la app las redimensiona antes).
+  async readTicket(imgs, contexto = {}) {
+    if (!this.hasKey()) throw new Error('Configurá tu API key en Ajustes → 🤖');
+    if (!imgs || !imgs.length) throw new Error('No hay fotos del ticket');
+
+    const ctx = [
+      contexto.tiendas && contexto.tiendas.length ? `Tiendas conocidas: ${contexto.tiendas.join(', ')}` : '',
+      contexto.ingredientes && contexto.ingredientes.length
+        ? `Catálogo de ingredientes (elegí de acá): ${contexto.ingredientes.join(' | ')}` : '',
+      contexto.productos && contexto.productos.length
+        ? `Productos del libro de precios: ${contexto.productos.join(' | ')}` : '',
+    ].filter(Boolean).join('\n');
+
+    const content = [{
+      type: 'text',
+      text: `Leé el ticket de estas fotos y devolvé el JSON con sus líneas.\n\n${ctx}`,
+    }];
+    for (const img of imgs) {
+      content.push({ type: 'image_url', image_url: { url: img } });
+    }
+
+    const raw = await this.call(
+      [{ role: 'system', content: this.systemPromptTicket }, { role: 'user', content }],
+      { json: true, temperature: 0.1, timeout: 120000 }
+    );
+    return this.extractJson(raw);
   },
 
   // ============================================
