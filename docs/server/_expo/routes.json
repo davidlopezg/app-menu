@@ -1,0 +1,88 @@
+{
+  "apiRoutes": [],
+  "htmlRoutes": [
+    {
+      "file": "./index.tsx",
+      "page": "/index",
+      "namedRegex": "^/(?:/)?$",
+      "routeKeys": {},
+      "assets": {
+        "css": [],
+        "js": [
+          "/_expo/static/js/web/_layout-e72a7f75300df07a27bf81aa1ac591bc.js",
+          "/_expo/static/js/web/index-cbdbe5b0e0545b573ab8680aa580cb7e.js"
+        ]
+      }
+    },
+    {
+      "file": "./explore.tsx",
+      "page": "/explore",
+      "namedRegex": "^/explore(?:/)?$",
+      "routeKeys": {},
+      "assets": {
+        "css": [],
+        "js": [
+          "/_expo/static/js/web/_layout-e72a7f75300df07a27bf81aa1ac591bc.js",
+          "/_expo/static/js/web/explore-a5ea1b22451e3adf6db072e0bb6264d1.js"
+        ]
+      }
+    },
+    {
+      "file": "expo-router/build/views/Sitemap.js",
+      "page": "/_sitemap",
+      "namedRegex": "^/_sitemap(?:/)?$",
+      "routeKeys": {},
+      "generated": true,
+      "assets": {
+        "css": [],
+        "js": [
+          "/_expo/static/js/web/_layout-e72a7f75300df07a27bf81aa1ac591bc.js"
+        ]
+      }
+    },
+    {
+      "file": "./onboarding/index.tsx",
+      "page": "/onboarding/index",
+      "namedRegex": "^/onboarding(?:/)?$",
+      "routeKeys": {},
+      "assets": {
+        "css": [],
+        "js": [
+          "/_expo/static/js/web/_layout-e72a7f75300df07a27bf81aa1ac591bc.js",
+          "/_expo/static/js/web/index-0b57bbc63ca420a2a11ce6cf25fd790e.js"
+        ]
+      }
+    }
+  ],
+  "notFoundRoutes": [
+    {
+      "file": "expo-router/build/views/Unmatched.js",
+      "page": "/+not-found",
+      "namedRegex": "^(?:/(?<notfound>.+?))?(?:/)?$",
+      "routeKeys": {
+        "notfound": "not-found"
+      },
+      "generated": true
+    }
+  ],
+  "redirects": [],
+  "rewrites": [],
+  "assets": {
+    "css": [
+      {
+        "type": "css",
+        "href": "/_expo/static/css/global-87fd0564cfa78f37afcb8d7603e15d75.css"
+      }
+    ],
+    "js": [
+      "/_expo/static/js/web/__expo-metro-runtime-ed4c1cfa6193d76fc294130e42bd1916.js",
+      "/_expo/static/js/web/__common-007b4716a6febe77c04810da813586cc.js",
+      "/_expo/static/js/web/entry-9cdef9d3179807edc6b52a48b56f89a9.js"
+    ],
+    "favicon": "/favicon.ico"
+  },
+  "rendering": {
+    "mode": "ssr",
+    "file": "_expo/server/render.js"
+  }
+}
