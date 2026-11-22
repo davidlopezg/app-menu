@@ -1,0 +1,499 @@
+{
+  "_nota": "Valores nutricionales por 100 g (o 100 ml) de alimento. Fuente: valores estándar por 100 g de cada alimento (tabla nutricional tipo USDA FoodData Central / Etiquetas de referencia). 'g_unidad' = gramos aproximados de 1 unidad (1 tomate, 1 huevo, 1 patata...). 'densidad' = g por ml (aceite 0.92, resto 1).",
+  "_unidades": {
+    "g": "peso directo",
+    "ml": "volumen x densidad",
+    "unidad": "cantidad x g_unidad",
+    "cuchara": "15 ml x densidad",
+    "cucharita": "5 ml x densidad",
+    "cucharas": "15 ml x densidad",
+    "cucharitas": "5 ml x densidad",
+    "dientes": "3 g por diente",
+    "latas": "120 g por lata",
+    "ramo": "30 g por ramo",
+    "puñado": "15 g por puñado",
+    "sobre": "10 g por sobre",
+    "none": "no computa (condimento al gusto)"
+  },
+  "alimentos": {
+    "pasta": {
+      "cal": 371,
+      "hc": 75,
+      "proteinas": 13,
+      "grasas": 1.5,
+      "fibra": 3.2,
+      "azucares": 2.7
+    },
+    "tomates cherry": {
+      "cal": 18,
+      "hc": 3.9,
+      "proteinas": 0.9,
+      "grasas": 0.2,
+      "fibra": 1.2,
+      "azucares": 2.6
+    },
+    "tomate triturado": {
+      "cal": 32,
+      "hc": 7,
+      "proteinas": 1.6,
+      "grasas": 0.3,
+      "fibra": 1.9,
+      "azucares": 5.1
+    },
+    "tomates maduros": {
+      "cal": 18,
+      "hc": 3.9,
+      "proteinas": 0.9,
+      "grasas": 0.2,
+      "fibra": 1.2,
+      "azucares": 2.6,
+      "g_unidad": 120
+    },
+    "ajo": {
+      "cal": 149,
+      "hc": 33,
+      "proteinas": 6.4,
+      "grasas": 0.5,
+      "fibra": 2.1,
+      "azucares": 1.0
+    },
+    "cebolla": {
+      "cal": 40,
+      "hc": 9.3,
+      "proteinas": 1.1,
+      "grasas": 0.1,
+      "fibra": 1.7,
+      "azucares": 4.2,
+      "g_unidad": 110
+    },
+    "aceite de oliva": {
+      "cal": 884,
+      "hc": 0,
+      "proteinas": 0,
+      "grasas": 100,
+      "fibra": 0,
+      "azucares": 0,
+      "densidad": 0.92
+    },
+    "albahaca fresca": {
+      "cal": 23,
+      "hc": 2.7,
+      "proteinas": 3.2,
+      "grasas": 0.6,
+      "fibra": 1.6,
+      "azucares": 0.3,
+      "g_unidad": 30
+    },
+    "queso parmesano": {
+      "cal": 420,
+      "hc": 3.2,
+      "proteinas": 38,
+      "grasas": 28,
+      "fibra": 0,
+      "azucares": 0.9
+    },
+    "huevos": {
+      "cal": 143,
+      "hc": 0.7,
+      "proteinas": 12.6,
+      "grasas": 9.5,
+      "fibra": 0,
+      "azucares": 0.4,
+      "g_unidad": 50
+    },
+    "setas": {
+      "cal": 22,
+      "hc": 3.3,
+      "proteinas": 3.1,
+      "grasas": 0.3,
+      "fibra": 1.0,
+      "azucares": 2.0
+    },
+    "arroz blanco": {
+      "cal": 360,
+      "hc": 80,
+      "proteinas": 7,
+      "grasas": 0.7,
+      "fibra": 1.3,
+      "azucares": 0.1
+    },
+    "arroz bomba": {
+      "cal": 360,
+      "hc": 80,
+      "proteinas": 7,
+      "grasas": 0.7,
+      "fibra": 1.3,
+      "azucares": 0.1
+    },
+    "agua": {
+      "cal": 0,
+      "hc": 0,
+      "proteinas": 0,
+      "grasas": 0,
+      "fibra": 0,
+      "azucares": 0
+    },
+    "azucar": {
+      "cal": 387,
+      "hc": 100,
+      "proteinas": 0,
+      "grasas": 0,
+      "fibra": 0,
+      "azucares": 100,
+      "densidad": 0.85
+    },
+    "platano macho": {
+      "cal": 89,
+      "hc": 23,
+      "proteinas": 1.5,
+      "grasas": 0.3,
+      "fibra": 2.6,
+      "azucares": 12,
+      "g_unidad": 190
+    },
+    "pimiento rojo": {
+      "cal": 31,
+      "hc": 6,
+      "proteinas": 1,
+      "grasas": 0.3,
+      "fibra": 2.1,
+      "azucares": 4.2,
+      "g_unidad": 150
+    },
+    "pimiento verde": {
+      "cal": 20,
+      "hc": 4.6,
+      "proteinas": 0.9,
+      "grasas": 0.2,
+      "fibra": 1.7,
+      "azucares": 4.0,
+      "g_unidad": 150
+    },
+    "cebolla morada": {
+      "cal": 40,
+      "hc": 9.3,
+      "proteinas": 1.1,
+      "grasas": 0.1,
+      "fibra": 1.7,
+      "azucares": 4.2,
+      "g_unidad": 100
+    },
+    "vinagre de jerez": {
+      "cal": 21,
+      "hc": 0.4,
+      "proteinas": 0.1,
+      "grasas": 0,
+      "fibra": 0,
+      "azucares": 0.4,
+      "densidad": 1.03
+    },
+    "vinagre balsamico": {
+      "cal": 88,
+      "hc": 17,
+      "proteinas": 0.5,
+      "grasas": 0,
+      "fibra": 0,
+      "azucares": 16,
+      "densidad": 1.05
+    },
+    "perejil": {
+      "cal": 36,
+      "hc": 6.3,
+      "proteinas": 3.0,
+      "grasas": 0.8,
+      "fibra": 3.3,
+      "azucares": 0.9
+    },
+    "calamar limpio": {
+      "cal": 92,
+      "hc": 0.8,
+      "proteinas": 17,
+      "grasas": 1.4,
+      "fibra": 0,
+      "azucares": 0
+    },
+    "tinta de calamar": {
+      "cal": 75,
+      "hc": 0,
+      "proteinas": 14,
+      "grasas": 0.5,
+      "fibra": 0,
+      "azucares": 0,
+      "g_unidad": 10
+    },
+    "caldo de pescado": {
+      "cal": 12,
+      "hc": 1.2,
+      "proteinas": 2.0,
+      "grasas": 0.4,
+      "fibra": 0,
+      "azucares": 0.4
+    },
+    "atun en lata": {
+      "cal": 116,
+      "hc": 0,
+      "proteinas": 26,
+      "grasas": 1,
+      "fibra": 0,
+      "azucares": 0
+    },
+    "lomo de cerdo": {
+      "cal": 143,
+      "hc": 0,
+      "proteinas": 21,
+      "grasas": 6,
+      "fibra": 0,
+      "azucares": 0
+    },
+    "merluza": {
+      "cal": 82,
+      "hc": 0,
+      "proteinas": 18,
+      "grasas": 0.7,
+      "fibra": 0,
+      "azucares": 0,
+      "g_unidad": 150
+    },
+    "gambas": {
+      "cal": 85,
+      "hc": 0.2,
+      "proteinas": 20,
+      "grasas": 0.5,
+      "fibra": 0,
+      "azucares": 0
+    },
+    "almejas": {
+      "cal": 74,
+      "hc": 0,
+      "proteinas": 10,
+      "grasas": 0.1,
+      "fibra": 0,
+      "azucares": 0
+    },
+    "vino blanco": {
+      "cal": 82,
+      "hc": 2.6,
+      "proteinas": 0.1,
+      "grasas": 0,
+      "fibra": 0,
+      "azucares": 2.6
+    },
+    "patatas": {
+      "cal": 77,
+      "hc": 17,
+      "proteinas": 2,
+      "grasas": 0.1,
+      "fibra": 2.2,
+      "azucares": 0.8,
+      "g_unidad": 200
+    },
+    "rucula": {
+      "cal": 25,
+      "hc": 3.7,
+      "proteinas": 2.6,
+      "grasas": 0.7,
+      "fibra": 1.6,
+      "azucares": 2.1
+    },
+    "pinones": {
+      "cal": 673,
+      "hc": 13,
+      "proteinas": 13,
+      "grasas": 68,
+      "fibra": 3.7,
+      "azucares": 4.1
+    },
+    "pollo": {
+      "cal": 165,
+      "hc": 0,
+      "proteinas": 31,
+      "grasas": 3.6,
+      "fibra": 0,
+      "azucares": 0
+    },
+    "curri en polvo": {
+      "cal": 325,
+      "hc": 65,
+      "proteinas": 14,
+      "grasas": 14,
+      "fibra": 33,
+      "azucares": 3,
+      "densidad": 0.5
+    },
+    "yogur natural": {
+      "cal": 61,
+      "hc": 4.7,
+      "proteinas": 3.5,
+      "grasas": 3.3,
+      "fibra": 0,
+      "azucares": 4.7
+    },
+    "limon": {
+      "cal": 29,
+      "hc": 9,
+      "proteinas": 1.1,
+      "grasas": 0.3,
+      "fibra": 2.8,
+      "azucares": 2.5,
+      "g_unidad": 100
+    },
+    "jengibre fresco": {
+      "cal": 80,
+      "hc": 18,
+      "proteinas": 1.8,
+      "grasas": 0.8,
+      "fibra": 2,
+      "azucares": 1.7
+    },
+    "salmon": {
+      "cal": 208,
+      "hc": 0,
+      "proteinas": 20,
+      "grasas": 13,
+      "fibra": 0,
+      "azucares": 0,
+      "g_unidad": 150
+    },
+    "calabacin": {
+      "cal": 17,
+      "hc": 3.1,
+      "proteinas": 1.2,
+      "grasas": 0.3,
+      "fibra": 1,
+      "azucares": 2.3,
+      "g_unidad": 250
+    },
+    "garbanzos cocidos": {
+      "cal": 164,
+      "hc": 27,
+      "proteinas": 8.9,
+      "grasas": 2.6,
+      "fibra": 7.6,
+      "azucares": 4.8
+    },
+    "comino": {
+      "cal": 375,
+      "hc": 44,
+      "proteinas": 18,
+      "grasas": 22,
+      "fibra": 11,
+      "azucares": 2.3,
+      "densidad": 0.5
+    },
+    "pimenton dulce": {
+      "cal": 282,
+      "hc": 54,
+      "proteinas": 14,
+      "grasas": 13,
+      "fibra": 35,
+      "azucares": 10,
+      "densidad": 0.5
+    },
+    "berenjena": {
+      "cal": 25,
+      "hc": 5.9,
+      "proteinas": 1,
+      "grasas": 0.2,
+      "fibra": 3,
+      "azucares": 3.5,
+      "g_unidad": 400
+    },
+    "eneldo": {
+      "cal": 43,
+      "hc": 7,
+      "proteinas": 3.5,
+      "grasas": 1.1,
+      "fibra": 2.8,
+      "azucares": 0
+    },
+    "oregano": {
+      "cal": 265,
+      "hc": 68,
+      "proteinas": 9,
+      "grasas": 4.3,
+      "fibra": 42,
+      "azucares": 4.1
+    },
+    "tomillo": {
+      "cal": 101,
+      "hc": 24,
+      "proteinas": 5.6,
+      "grasas": 1.7,
+      "fibra": 14,
+      "azucares": 1.7
+    },
+    "habas cocidas": {
+      "cal": 125,
+      "hc": 22,
+      "proteinas": 8,
+      "grasas": 0.5,
+      "fibra": 7.5,
+      "azucares": 1.8
+    },
+    "jamon serrano": {
+      "cal": 330,
+      "hc": 0,
+      "proteinas": 42,
+      "grasas": 20,
+      "fibra": 0,
+      "azucares": 0
+    }
+  },
+  "alias": {
+    "pasta (espaguetis o la que prefieras)": "pasta",
+    "pasta (espaguetis)": "pasta",
+    "tomates cherry": "tomates cherry",
+    "aceite de oliva virgen extra": "aceite de oliva",
+    "queso parmesano rallado": "queso parmesano",
+    "queso parmesano en lascas": "queso parmesano",
+    "setas variadas (champinones, shiitake)": "setas",
+    "setas variadas (champinones)": "setas",
+    "arroz bomba o calasparra": "arroz bomba",
+    "caldo de pescado": "caldo de pescado",
+    "atun en lata escurrido": "atun en lata",
+    "lomo de cerdo en filetes": "lomo de cerdo",
+    "merluza en rodajas": "merluza",
+    "gambas peladas": "gambas",
+    "perejil fresco": "perejil",
+    "perejil picado": "perejil",
+    "perejil fresco (opcional)": "perejil",
+    "eneldo o perejil": "eneldo",
+    "filetes de salmon": "salmon",
+    "salmon": "salmon",
+    "limon (jugo)": "limon",
+    "vino blanco (opcional)": "vino blanco",
+    "pimenton dulce (opcional)": "pimenton dulce",
+    "pinos (opcional)": "pinos",
+    "dientes de ajo": "ajo",
+    "tomate triturado": "tomate triturado",
+    "cebolla morada": "cebolla morada",
+    "pimiento rojo": "pimiento rojo",
+    "pimientos rojos": "pimiento rojo",
+    "pimiento verde": "pimiento verde",
+    "pimientos verdes": "pimiento verde",
+    "platano macho": "platano macho",
+    "albahaca fresca": "albahaca fresca",
+    "yogur natural": "yogur natural",
+    "curri en polvo": "curri en polvo",
+    "jengibre fresco rallado": "jengibre fresco",
+    "rucula": "rucula",
+    "garbanzos cocidos": "garbanzos cocidos",
+    "azucar": "azucar",
+    "sal": "sal",
+    "sal y pimienta": "sal",
+    "sal, pimienta y azúcar (para cortar acidez)": "sal",
+    "sal, pimenton y perejil": "sal",
+    "sal y perejil": "sal",
+    "sal y hierbas (oregano, tomillo)": "sal",
+    "perejil": "perejil",
+    "agua": "agua"
+  },
+  "sin_calcular": {
+    "sal": 0,
+    "sal y pimienta": 0,
+    "sal, pimienta y azúcar (para cortar acidez)": 0,
+    "sal, pimenton y perejil": 0,
+    "sal y perejil": 0,
+    "sal y hierbas (oregano, tomillo)": 0
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "week_key": "2026-W40",
+  "data": {
+    "friday": {
+      "lunch": "75b3093e-2e1f-4137-947f-7183fc74b875",
+      "dinner": "8915e454-c546-4483-8bcb-923700b54ac8"
+    },
+    "monday": {
+      "lunch": "5087ba6e-cd6b-4fa2-963c-4db9a00d0624",
+      "dinner": "7dcb2eff-911d-49f0-ae96-b0307afd54f8"
+    },
+    "sunday": {
+      "lunch": "498c1b59-7d73-4452-9ac5-d58ad7dabf76",
+      "dinner": "9a0bc0fc-2dca-4d55-9c48-0ab4a61f998e"
+    },
+    "tuesday": {
+      "lunch": "b84d8a75-50fc-44d5-8aa2-a53f181a90dc",
+      "dinner": "1c9ea72c-6bb0-4583-a135-73b0f23c2a2d"
+    },
+    "saturday": {
+      "lunch": "5f461434-9635-4350-b065-003d28c57f78",
+      "dinner": "6647117d-d7b7-4bf3-ba17-f51430a5424b"
+    },
+    "thursday": {
+      "lunch": "14671e6c-5287-44cf-9c38-9f3a5152339d",
+      "dinner": "d46a537d-55a0-4214-b877-6ab7d36dc6f8"
+    },
+    "wednesday": {
+      "lunch": "4ceba64a-162d-424a-b249-0105930fa0cd",
+      "dinner": "208a952e-04c7-4c35-b0b7-30875ec214c0"
+    }
+  },
+  "updated_at": "2026-09-22T18:02:40.259+00:00"
+}
