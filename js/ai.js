@@ -1,0 +1,656 @@
+// ============================================
+// AI — Cliente para MiniMax API (compatible OpenAI)
+// ============================================
+// La API key se guarda en localStorage (no en el código).
+// Para configurarla: Ajustes → 🤖 Agente IA → pegar key.
+
+const AI = {
+  STORAGE_KEY: 'menuapp_ai_key',
+  CFG_KEY: 'menuapp_ai_cfg',
+
+  // Providers conocidos (el usuario puede editar el endpoint y modelo manualmente)
+  PROVIDERS: {
+    'openai':     { endpoint: 'https://api.openai.com/v1/chat/completions',         model: 'gpt-4o-mini',           name: 'OpenAI' },
+    'minimax':    { endpoint: 'https://api.minimax.io/v1/chat/completions',         model: 'MiniMax-M3',            name: 'MiniMax' },
+    'mistral':    { endpoint: 'https://api.mistral.ai/v1/chat/completions',         model: 'mistral-small-latest',  name: 'Mistral' },
+    'groq':       { endpoint: 'https://api.groq.com/openai/v1/chat/completions',     model: 'llama-3.1-8b-instant',  name: 'Groq (Llama)' },
+    'openrouter': { endpoint: 'https://openrouter.ai/api/v1/chat/completions',       model: 'openai/gpt-4o-mini',    name: 'OpenRouter' },
+    'custom':     { endpoint: '', model: '',                                         name: 'Personalizado' },
+  },
+
+  systemPromptRecipe: `Eres un asistente culinario experto en cocina mediterránea y española.
+Cuando recibas el nombre de una receta, devuelve SOLO un objeto JSON válido (sin markdown, sin explicaciones) con esta estructura exacta:
+
+{
+  "ingredientes": [
+    {"nombre": "Nombre del ingrediente", "cantidad": "200", "unidad": "g"}
+  ],
+  "pasos": [
+    "Paso 1 descrito en una o dos frases claras.",
+    "Paso 2 ..."
+  ]
+}
+
+Reglas:
+- "unidad" puede ser: g, kg, ml, l, unidad, cuchara, cucharadita, taza, none.
+- "cantidad" es texto libre (ej: "200", "al gusto", "un puñado").
+- Si el título ya da pistas (ej: "Tortilla de patatas"), asume la versión clásica.
+- Pasos numerados mentalmente pero el array no incluye el número.`,
+
+  systemPromptMenu: `Eres un asistente que ayuda a David y María a planificar su menú semanal.
+Conoces las recetas disponibles (las pasamos en cada mensaje).
+Tu trabajo es sugerir menús equilibrados, variados y apropiados para la pregunta del usuario.
+
+IMPORTANTE: Cuando el usuario pida una propuesta de menú, devuelve SIEMPRE un objeto JSON válido (sin markdown, sin explicaciones fuera del JSON) con esta estructura:
+
+{
+  "respuesta": "Texto amigable dirigido al usuario (2-4 frases)",
+  "menu_propuesto": null,
+  "menu_propuesto": {
+    "lunes":    {"comida": "nombre exacto de receta", "cena": "nombre exacto de receta"},
+    "martes":   {"comida": "...", "cena": "..."},
+    "miercoles":{"comida": "...", "cena": "..."},
+    "jueves":   {"comida": "...", "cena": "..."},
+    "viernes":  {"comida": "...", "cena": "..."},
+    "sabado":   {"comida": "...", "cena": "..."},
+    "domingo":  {"comida": "...", "cena": "..."}
+  }
+}
+
+Reglas:
+- Los nombres de receta deben COINCIDIR EXACTAMENTE con los de la lista de disponibles.
+- Si la pregunta no es sobre un menú (ej: pregunta general de cocina), "menu_propuesto" debe ser null.
+- Si solo propone 1-3 días, pon null en los días que no propuso.
+- Apunta a variedad: no repitas proteína 2 días seguidos.
+- Cenas suelen ser más ligeras que los almuerzos.`,
+
+  systemPromptAnalysis: `Eres un asistente nutricional riguroso que analiza menús semanales para David y María, con foco en salud general y prevención oncológica. Basás tus criterios en consensos oficiales: OMS, WCRF/AICR, AECC, EFSA, FDA.
+
+Vas a recibir dos bloques de datos:
+1. **DATOS DE LA SEMANA**: 14 comidas (7 días × comida + cena) con sus valores nutricionales por ración.
+2. **CATÁLOGO DE RECETAS DISPONIBLES**: lista de recetas en el recetario, con tipo y tags, para que puedas proponer sustituciones concretas usando recetas que el usuario ya tiene.
+
+=== REGLAS DE EVALUACIÓN (prevención general y salud) ===
+
+A PROMOVER (puntuación +):
+- Patrón mediterráneo y base vegetal: aceite de oliva como grasa principal, frutas, verduras, legumbres, frutos secos, cereales integrales.
+- Fibra: meta 20–30 g/día (≥2 frutas, ≥3 verduras, ≥6 cereales integrales). La fibra reduce el tiempo de tránsito intestinal y ayuda a fijar sustancias no deseadas.
+- Proteínas saludables: pescado (especialmente azul, 2–3 veces/semana), aves, carnes magras, legumbres, huevos.
+- Cocciones suaves: vapor, horno suave, guisos, salteados, hervido. Evitar frituras y plancha/parilla a alta temperatura.
+- Agua como bebida principal.
+
+A PENALIZAR (puntuación −):
+- Carnes procesadas (embutidos, bacon, salchichas, jamón): ALERTA MÁXIMA. Forman NOC y PAH.
+- Carne roja: limitar a 1–2 veces/semana, no más.
+- Frituras y cocciones a alta temperatura: forman nitrosaminas y aminas heterocíclicas.
+- Ultraprocesados: refrescos azucarados, bollería industrial, comida rápida, harinas refinadas con grasas saturadas.
+- Alcohol: factor de riesgo directo, penalizar.
+- Carbohidratos refinados y azúcares libres en CENAS (afectan descanso y composición corporal).
+- Exceso calórico crónico: la obesidad es factor modificable de 13 tipos de cáncer (endometrio, mama posmenopáusica, ovario, colorrectal, esófago, riñón, páncreas, hígado, estómago, meningioma, mieloma, vesícula, tiroides) por mecanismos inflamatorios, hiperinsulinemia y estrógenos.
+
+DESMITIFICAR (no caer en bulos, no los repitas):
+- "Eliminar el azúcar cura el cáncer" es FALSO. Todas las células consumen glucosa y el cuerpo mantiene sus niveles estables. Penalizá el azúcar solo por su aporte calórico.
+- No promociones "super-alimentos" (frutos rojos, té verde, cúrcuma) como cura directa.
+- No uses vocabulario alarmista ni pseudo-terapéutico. Mantené rigor científico.
+
+MÓDULO CLÍNICO (si el menú es para alguien en tratamiento activo de quimioterapia/inmunoterapia, aplicalo; si no, omití silenciosamente):
+- ALERTA: nada crudo o poco cocinado (sushi, mariscos crudos, huevo crudo, leche/quesos no pasteurizados, ensaladas de buffet). Riesgo de Salmonella/Listeria por inmunosupresión.
+- Evitar fritos, muy grasosos o muy azucarados (empeoran náuseas).
+- Proteínas magras bien cocinadas (pollo/pavo/pescado al horno, huevo duro, legumbres cocidas, tofu).
+- Frutas y verduras bien lavadas, peladas o cocinadas.
+
+=== MÓDULO ANTIINFLAMATORIO (Dr. Sebastián La Rosa) ===
+Criterios adicionales basados en la experiencia clínica del Dr. Sebastián La Rosa, enfocados en reducir la inflamación sistémica, reparar células y mejorar la salud integral. Aplicá estas reglas SIEMPRE que el menú lo permita; son complementarios (no contradictorios) con las reglas OMS/WCRF/AICR de arriba. Son las "tres bases estructurales": alimentación, movimiento y descanso. Este módulo cubre la base de ALIMENTACIÓN.
+
+A PROMOVER (puntuación +):
+- ORDEN DE LOS ALIMENTOS (aplanar la curva de glucosa): consumir primero la fibra (ensaladas/verduras) y la proteína, esperar 20–30 minutos, y consumir los carbohidratos al final. Esto evita los picos de azúcar en sangre que disparan la inflamación. Valorá positivamente los platos que respeten esta secuencia (ej: "primer plato verdura + proteína, segundo plato HC") y negativamente los que mezclan fibra + HC + proteína desde el primer bocado sin separación temporal (ej: pasta con verduras salteadas y atún todo junto desde el minuto 0).
+- MICROBIOTA INTESTINAL: presencia de alimentos ricos en fibra soluble, especialmente legumbres y hongos (champiñones, setas, shiitake, portobello), que nutren las bacterias beneficiosas del intestino. Refuerza la meta de legumbres 2-3×/sem.
+- OMEGA-3 (EPA y DHA): consumo de pescados grasos (salmón, sardinas, caballa, anchoas, chicharro, atún), mariscos o algas para asegurar suficiente Omega-3 con sus potentes efectos antiinflamatorios. Refuerza la meta de "pescado azul 2-3×/sem" y es especialmente valioso si el plato se cocina al horno/plancha suave/vapor (no fritura, que degrada los EPA/DHA).
+- SULFORAFANO: presencia de crucíferas (brócoli, coliflor, kale, rúcula, coles de Bruselas, repollo, nabos) al menos 1–2×/sem por su contenido en sulforafano, un compuesto protector contra la oxidación y el envejecimiento celular. Importante: el sulforafano se preserva mejor con cocción suave (al vapor o salteado rápido); penalizar brócoli muy hervido o frito.
+- ESTRUCTURA DEL DÍA: almuerzo como comida más completa (más kcal, más HC complejos, mayor ración) y cenas ligeras + tempranas, alineado con la cronobiología y la capacidad digestiva/enzimática que es mayor hacia el mediodía.
+
+A PENALIZAR (puntuación −):
+- LÁCTEOS CONVENCIONALES en exceso: reducir el consumo excesivo de lácteos convencionales (leche entera, quesos frescos industriales, yogur azucarado, nata, mantequilla) por su potencial inflamatorio en personas con sensibilidad. Pequeñas cantidades en receta (ej: un poco de queso rallado en una pasta, una salsa ligera) NO se penalizan; sí se penaliza el consumo abundante o diario (desayuno lácteo pesado, postre lácteo diario, queso como ingrediente principal). Preferí yogur natural sin azúcar, kéfir o quesos fermentados maduros con moderación.
+- CENAS DE ESTRUCTURA INVERSA: cenas que estructuralmente deberían ser almuerzos (pasta grande con carne, lasaña, fabada como plato único nocturno, guisos densos, arroces pesados, frituras). La cronobiología penaliza sistemáticamente las cenas pesadas porque deterioran el descanso y la reparación celular.
+- CARBOHIDRATOS REFINADOS EN CENA: cena con pan blanco, pasta blanca, arroz blanco o patatas como plato principal (HC > 25 g/ración en cena) penaliza doble: por refinado y por cronobiología. Es preferible verdura + proteína magra con HC mínimos.
+- COCCIONES DESTRUCTIVAS DE OMEGA-3: si el plato aporta pescado azul pero se fríe o se cocina a muy alta temperatura, se anula parte del beneficio antiinflamatorio (degradación de EPA/DHA y formación de compuestos pro-inflamatorios). Penalizar y sugerir horno, vapor, plancha suave o papillote.
+- CRUCÍFERAS MAL COCINADAS: brócoli/coliflor muy hervidos (más de 10-15 min en agua) pierden hasta el 80% del sulforafano. Valorá positivamente el brócoli al dente, al vapor 5-7 min, salteado rápido o crudo rallado (en salad).
+
+INTERACCIÓN CON OTROS MÓDULOS:
+- Este módulo se evalúa JUNTO con MÓDULO CLÍNICO. Si hay conflicto (ej: brócoli crudo para paciente en tratamiento activo), prevalece MÓDULO CLÍNICO (siempre bien lavado/pelado/cocinado). Para usuarios sin tratamiento activo, aplicá este módulo con normalidad.
+- Refuerza y nunca contradice las METAS SEMANALES CUANTITATIVAS; si un plato cumple una meta cuantitativa Y además respeta un criterio de La Rosa (ej: salmón al horno = pescado azul 2-3×/sem + Omega-3 + cocción suave), bonificá doble.
+
+=== METAS SEMANALES CUANTITATIVAS (targets David & María) ===
+
+Al evaluar, contá cuántas veces aparece cada categoría en las 14 comidas de la semana y compará con estas metas. Usá el NOMBRE de la receta + el campo 'tipo' + los 'tags' para clasificar.
+
+- Pescado azul 2-3×/sem (salmón, sardinas, caballa, atún, anchoas, chicharro).
+- Legumbres 2-3×/sem (lentejas, garbanzos, judías, habichuelas, soja, edamame).
+- Pollo o pavo 2-3×/sem (carnes blancas magras).
+- Carne roja ≤1×/sem (ternera, cordero, cerdo — este último si es magro).
+- Huevos 2-3×/sem (tortilla, revuelto, duro, pochado).
+- Verdura presente en comida Y cena todos los días (cero días sin verdura en alguna comida).
+- Cocciones suaves: horno, vapor, salteado, hervido, guiso. PENALIZAR fritura, plancha muy intensa, barbacoa.
+- Cenas SIN o con muy pocos carbohidratos refinados (hc ≤ 20 g/ración aprox). Las cenas con legumbres, verdura, pescado o huevo son ideales.
+- Aceite de oliva como grasa principal (penalizar mantequcilla, margarina, grasas saturadas).
+- Fibra 20-30 g/día: cereales INTEGRALES (no refinados) + legumbres + verdura. Si todo es harina blanca, penalizar.
+
+Clasificá cada receta por nombre + tags. Si dudás (ej: "Pollo a la parmesana" = pollo pero frito y con queso), usá el nombre como guía y marcalo con la advertencia correspondiente.
+
+=== FORMATO DE SALIDA (JSON estricto) ===
+
+Devuelve SOLO un objeto JSON válido (sin markdown, sin texto fuera del JSON) con esta estructura EXACTA:
+
+{
+  "puntuacion_global": 75,
+  "resumen": "2-3 frases con el panorama general del menú",
+  "alertas_seguridad": ["...", "..."],
+  "bueno": ["...", "..."],
+  "equilibrado": ["..."],
+  "malo": ["..."],
+  "propuestas_de_sustitucion": [
+    {
+      "donde": "martes-cena: Nombre de la receta actual",
+      "problema": "por qué es mejorable (1 frase corta)",
+      "opciones": [
+        "Cambiar por: Nombre exacto de receta del catálogo (por qué encaja mejor)",
+        "Cambiar cocción: de fritura a horno suave (mismo plato, mejor método)"
+      ]
+    }
+  ]
+}
+
+Reglas de los campos:
+- "puntuacion_global": entero 0–100, basada estrictamente en las reglas de arriba. 80+ = menú muy bien planteado, 60–79 = bien con mejoras, 40–59 = necesita ajustes, <40 = requiere re-planificación seria.
+- "alertas_seguridad": SOLO si hay algo grave (procesados, frituras repetidas, crudo, alcohol). Si no hay, [].
+- "bueno", "equilibrado", "malo": arrays de strings cortos (1-2 frases). Si no aplica, [].
+- "propuestas_de_sustitucion": SOLO si hay margen real de mejora. Si todo está OK, [].
+- "opciones" debe tener 1-3 alternativas concretas. Priorizá usar recetas del catálogo (cítalas con nombre EXACTO).
+- "donde" debe mencionar el día-comida y nombre de la receta actual.
+
+Otras reglas:
+- Sé específico: mencioná nombres de recetas concretas cuando critiques o elogie.
+- No inventes datos, analizá SOLO lo que te paso. Si una comida está vacía, mencionala.
+- Respondé en español, tuteando.`,
+
+  // Lector de tickets: recibe 1-2 fotos de un ticket y devuelve las líneas.
+  systemPromptTicket: `Sos un lector de tickets de compra de supermercados.
+
+Recibés 1 o 2 fotos de un ticket (si hay 2, son dos partes del MISMO ticket: juntalas en un solo ticket) y devolvés SOLO un objeto JSON válido, sin markdown y sin explicaciones, con esta estructura exacta:
+
+{
+  "tienda": "Nombre de la tienda tal como aparece en el ticket",
+  "fecha": "YYYY-MM-DD",
+  "total": 87.40,
+  "lineas": [
+    {
+      "descripcion": "El artículo tal como está escrito en el ticket",
+      "cantidad": 1,
+      "precio_unit": 1.29,
+      "precio_total": 1.29,
+      "ingrediente": "Nombre del ingrediente del catálogo, o null si no reconocés ninguno"
+    }
+  ]
+}
+
+Reglas:
+- "total" es el importe FINAL a pagar (buscá "TOTAL", "TOTAL A PAGAR", "IMPORTE"). Si hay descuento, redondeo o pago con tarjeta, no lo inventes.
+- Las líneas que NO son artículos (subtotales, IVA, forma de pago, cambio, puntos, tarjetas) NO van como líneas.
+- "cantidad", "precio_unit" y "precio_total" son NÚMEROS (sin € ni comas). Si no se ve el precio de una línea, pon null.
+- Si el artículo sale como "6 x 0,99", pon cantidad 6, precio_unit 0.99 y precio_total 5.94.
+- "ingrediente": elegí el más cercano del catálogo que te paso. Si dudás, null (es preferible null que inventar).
+- Si la foto está borrosa, tapada o no es un ticket, devolvé {"error": "No se lee el ticket"} y nada más.`,
+
+  // Estado
+  key: '',
+  endpoint: '',
+  model: '',
+  provider: 'openai',
+
+  init() {
+    this.key = localStorage.getItem(this.STORAGE_KEY) || '';
+    try {
+      const cfg = JSON.parse(localStorage.getItem(this.CFG_KEY) || 'null');
+      if (cfg) {
+        this.endpoint = cfg.endpoint || this.PROVIDERS.minimax.endpoint;
+        this.model = cfg.model || this.PROVIDERS.minimax.model;
+        this.provider = cfg.provider || 'minimax';
+      } else {
+        // Defaults: MiniMax (lo que usa este proyecto)
+        this.endpoint = this.PROVIDERS.minimax.endpoint;
+        this.model = this.PROVIDERS.minimax.model;
+        this.provider = 'minimax';
+      }
+    } catch {
+      this.endpoint = this.PROVIDERS.minimax.endpoint;
+      this.model = this.PROVIDERS.minimax.model;
+      this.provider = 'minimax';
+    }
+  },
+
+  setKey(k) {
+    this.key = (k || '').trim();
+    if (this.key) localStorage.setItem(this.STORAGE_KEY, this.key);
+    else localStorage.removeItem(this.STORAGE_KEY);
+  },
+
+  setConfig(provider, endpoint, model) {
+    this.provider = provider;
+    this.endpoint = (endpoint || '').trim();
+    this.model = (model || '').trim();
+    localStorage.setItem(this.CFG_KEY, JSON.stringify({
+      provider: this.provider,
+      endpoint: this.endpoint,
+      model: this.model,
+    }));
+  },
+
+  hasKey() {
+    return !!this.key && !!this.endpoint && !!this.model;
+  },
+
+  // ============================================
+  // Helpers
+  // ============================================
+  // Analiza 1-2 fotos de un ticket de compra y devuelve sus líneas.
+  // Las fotos van como data URL (la app las redimensiona antes).
+  async readTicket(imgs, contexto = {}) {
+    if (!this.hasKey()) throw new Error('Configurá tu API key en Ajustes → 🤖');
+    if (!imgs || !imgs.length) throw new Error('No hay fotos del ticket');
+
+    const ctx = [
+      contexto.tiendas && contexto.tiendas.length ? `Tiendas conocidas: ${contexto.tiendas.join(', ')}` : '',
+      contexto.ingredientes && contexto.ingredientes.length
+        ? `Catálogo de ingredientes (elegí de acá): ${contexto.ingredientes.join(' | ')}` : '',
+      contexto.productos && contexto.productos.length
+        ? `Productos del libro de precios: ${contexto.productos.join(' | ')}` : '',
+    ].filter(Boolean).join('\n');
+
+    const content = [{
+      type: 'text',
+      text: `Leé el ticket de estas fotos y devolvé el JSON con sus líneas.\n\n${ctx}`,
+    }];
+    for (const img of imgs) {
+      content.push({ type: 'image_url', image_url: { url: img } });
+    }
+
+    const raw = await this.call(
+      [{ role: 'system', content: this.systemPromptTicket }, { role: 'user', content }],
+      { json: true, temperature: 0.1, timeout: 120000 }
+    );
+    return this.extractJson(raw);
+  },
+
+  // ============================================
+  // Helpers
+  // ============================================
+  async call(messages, opts = {}) {
+    if (!this.key) throw new Error('API key no configurada. Andá a Ajustes.');
+    if (!this.endpoint) throw new Error('Endpoint no configurado. Andá a Ajustes.');
+    if (!this.model) throw new Error('Modelo no configurado. Andá a Ajustes.');
+
+    const body = {
+      model: this.model,
+      messages,
+      temperature: opts.temperature ?? 0.6,
+    };
+    // Algunos providers no soportan response_format
+    if (opts.json && this.provider !== 'custom' && this.provider !== 'minimax') {
+      body.response_format = { type: 'json_object' };
+    }
+
+    let res;
+    // Timeout configurable (algunos prompts grandes tardan más de 30s)
+    const timeoutMs = opts.timeout ?? 45000;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      // Log útil para debug en DevTools (consola del navegador)
+      console.log('[AI] request →', {
+        provider: this.provider,
+        endpoint: this.endpoint,
+        model: this.model,
+        keyLen: this.key?.length || 0,
+        keyPrefix: this.key ? this.key.slice(0, 7) + '…' : '(empty)',
+        timeoutMs,
+        bodyKB: Math.round(JSON.stringify(body).length / 1024),
+      });
+
+      res = await fetch(this.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.key}`,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+    } catch (e) {
+      clearTimeout(timer);
+      const isAbort = e.name === 'AbortError' || /aborted/i.test(e.message || '');
+      const ctx = `[provider=${this.provider}, endpoint=${this.endpoint}]`;
+      if (isAbort) {
+        throw new Error(`Timeout después de ${Math.round(timeoutMs / 1000)}s. ${ctx}. ` +
+          'El prompt puede ser muy grande o el endpoint muy lento. Probá recargar la página.');
+      }
+      throw new Error('Error de red: ' + (e.message || e) + '. ' +
+        '¿Endpoint correcto? ¿HTTPS si la app está en HTTPS? ' + ctx);
+    }
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      // Log de la respuesta cruda para debug
+      console.warn('[AI] response error', res.status, txt);
+
+      // Info de contexto (qué provider/endpoint estaba configurado)
+      const ctx = `[provider=${this.provider}, endpoint=${this.endpoint}]`;
+
+      let msg = '';
+      if (res.status === 401) {
+        // MiniMax devuelve 401 con status_code 1004 en base_resp
+        let detail = '';
+        try {
+          const j = JSON.parse(txt);
+          const code = j?.base_resp?.status_code;
+          const smsg = j?.base_resp?.status_msg;
+          const apiMsg = j?.error?.message || j?.message;
+          if (code) detail = ` (code ${code}: ${smsg || 'key inválida'})`;
+          else if (apiMsg) detail = ` (${apiMsg})`;
+        } catch {}
+        msg = `401 Unauthorized${detail}. La key no es válida para este endpoint. ` +
+              `Revisá que el proveedor del dropdown coincida con el de tu key. ${ctx}`;
+      } else if (res.status === 403) {
+        msg = `403 Forbidden. La key es válida pero no tiene permisos (¿suscripción agotada?). ${ctx}`;
+      } else if (res.status === 404) {
+        msg = `404 Not Found. El endpoint no existe (¿URL mal escrita?). ${ctx}`;
+      } else if (res.status === 429) {
+        msg = `429 Too Many Requests. Rate limit alcanzado. ${ctx}`;
+      } else {
+        msg = `${res.status}: ${txt.slice(0, 200)} ${ctx}`;
+      }
+      throw new Error(msg);
+    }
+
+    const data = await res.json();
+    // Extraer texto de varios formatos posibles (OpenAI, MiniMax, etc.)
+    const text = (
+      data.choices?.[0]?.message?.content ??  // OpenAI / MiniMax OpenAI-compatible
+      data.choices?.[0]?.text ??               // algunos
+      data.reply ??                            // MiniMax directo
+      data.text ??                             // generico
+      data.content ??                          // generico
+      data.message?.content ??                  // otro formato
+      ''
+    );
+    return text;
+  },
+
+  // Extrae JSON de una respuesta que puede tener markdown ```json ... ```
+  extractJson(text) {
+    let cleaned = text.trim();
+    // quitar fences ```json ... ```
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+    try {
+      return JSON.parse(cleaned);
+    } catch (e) {
+      // Intentar encontrar el primer {...} balanceado
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { return JSON.parse(match[0]); } catch {}
+      }
+      throw new Error('No se pudo parsear JSON: ' + cleaned.slice(0, 100));
+    }
+  },
+
+  // Normaliza la lista de ingredientes que devuelve la IA al formato
+  // interno { nombre, cantidad, unidad }. Acepta:
+  //   - objetos con campos en español ({nombre, cantidad, unidad})
+  //   - objetos con campos en inglés ({name, quantity, unit, amount})
+  //   - strings sueltos ("Patata 300g") — en ese caso intenta parsear
+  // Si la IA devuelve algo irreconocible, devuelve [].
+  normalizeIngredients(raw) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (const item of raw) {
+      if (!item) continue;
+      if (typeof item === 'string') {
+        // string suelto: "Patatas 300g" o "4 huevos"
+        const parsed = this._parseIngredientString(item);
+        if (parsed) out.push(parsed);
+        continue;
+      }
+      if (typeof item !== 'object') continue;
+
+      // Aceptar nombres en español O inglés (la API a veces cambia)
+      const nombre = item.nombre ?? item.name ?? item.ingredient ?? item.ingrediente ?? '';
+      const cantidad = item.cantidad ?? item.quantity ?? item.amount ?? item.qty ?? '';
+      const unidad = item.unidad ?? item.unit ?? item.uom ?? '';
+      if (!nombre || !String(nombre).trim()) continue;
+      out.push({
+        nombre: String(nombre).trim(),
+        cantidad: String(cantidad ?? '').trim(),
+        unidad: String(unidad ?? '').trim() || 'none',
+      });
+    }
+    return out;
+  },
+
+  // Heurística: "Patatas 300g" → {nombre: "Patatas", cantidad: "300", unidad: "g"}
+  _parseIngredientString(s) {
+    if (!s || typeof s !== 'string') return null;
+    const m = s.trim().match(/^(.+?)\s+(\d+(?:[.,]\d+)?)\s*([a-zA-Z]+|cda|cdita|taza|ud)?$/);
+    if (m) {
+      return {
+        nombre: m[1].trim(),
+        cantidad: m[2].replace(',', '.'),
+        unidad: (m[3] || 'none').trim(),
+      };
+    }
+    return { nombre: s.trim(), cantidad: '', unidad: 'none' };
+  },
+
+  // Normaliza la lista de pasos. Acepta strings o {text, paso}.
+  normalizeSteps(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map(s => {
+        if (typeof s === 'string') return s.trim();
+        if (s && typeof s === 'object') {
+          return String(s.paso ?? s.text ?? s.step ?? s.descripcion ?? '').trim();
+        }
+        return '';
+      })
+      .filter(Boolean);
+  },
+
+  // ============================================
+  // Acciones de alto nivel
+  // ============================================
+
+  // Rellena ingredientes y pasos de una receta a partir de su título
+  async completeRecipe(title) {
+    const text = await this.call([
+      { role: 'system', content: this.systemPromptRecipe },
+      { role: 'user', content: `Receta: "${title}"` },
+    ], { json: true });
+    return this.extractJson(text);
+  },
+
+  // Analiza el menú completo de la semana: bueno / equilibrado / malo
+  async analyzeWeek(weekData, recipes) {
+    const days = Store.getDaysOrder();
+    const dayNames = { monday: 'lunes', tuesday: 'martes', wednesday: 'miércoles',
+                       thursday: 'jueves', friday: 'viernes', saturday: 'sábado', sunday: 'domingo' };
+    const lines = [];
+    for (const day of days) {
+      for (const meal of Store.getMealTypes()) {
+        const recipeId = weekData?.[day]?.[meal];
+        const recipe = recipeId ? recipes.find(r => r.id === recipeId) : null;
+        if (recipe) {
+          const n = recipe.nutricion || {};
+          const tipo = recipe.tipoComida || 'ambos';
+          const tags = (recipe.tags || []).join(',') || '-';
+          lines.push(
+            `${dayNames[day]}-${meal}: ${recipe.nombre} ` +
+            `[tipo:${tipo}, tags:${tags}] ` +
+            `(cal:${n.cal ?? 0}, hc:${n.hc ?? 0}, prot:${n.proteinas ?? 0}, ` +
+            `grasas:${n.grasas ?? 0}, azucares:${n.azucares ?? 0})`
+          );
+        } else {
+          lines.push(`${dayNames[day]}-${meal}: (vacío)`);
+        }
+      }
+    }
+
+    // Catálogo de recetas (para que pueda proponer sustituciones concretas)
+    const catalog = recipes.map(r => {
+      const tags = (r.tags || []).join(', ');
+      const tipo = r.tipoComida || 'ambos';
+      return `- ${r.nombre} [tipo:${tipo}${tags ? `, tags:${tags}` : ''}]`;
+    }).join('\n');
+
+    const userPrompt =
+      `=== DATOS DE LA SEMANA (14 comidas) ===\n${lines.join('\n')}\n\n` +
+      `=== CATÁLOGO DE RECETAS DISPONIBLES (${recipes.length}) ===\n${catalog}`;
+
+    const text = await this.call([
+      { role: 'system', content: this.systemPromptAnalysis },
+      { role: 'user', content: userPrompt },
+    ], { json: true });
+    return this.extractJson(text);
+  },
+
+  systemPromptProposeMenu: `Eres un asistente que planifica el menú semanal de David y María con un objetivo nutricional concreto. Recibís DOS cosas:
+
+1. **CATÁLOGO**: lista de TODAS las recetas disponibles (solo los nombres).
+2. **MENÚ ACTUAL**: lo que ya hay asignado en esta semana (puede estar vacío, completo o parcial).
+
+Tu trabajo: proponer el MEJOR menú semanal posible usando SOLO recetas del catálogo, respetando metas nutricionales estrictas.
+
+=== INFERIR CATEGORÍAS POR EL NOMBRE ===
+Como solo recibís los nombres de las recetas, tenés que deducir las categorías por el nombre:
+- Pescado azul: salmón, sardinas, caballa, atún, anchoas, chicharro, melva, boquerón, arenque, jurel.
+- Legumbres: lentejas, garbanzos, judías, habichuelas, soja, edamame, frijoles, porotos, alubias.
+- Pollo o pavo: cualquier receta con "pollo" o "pavo" en el nombre.
+- Huevos: tortilla, revuelto, frittata, huevos (duro, pochado, etc.).
+- Carne roja: ternera, cordero, cerdo, vacuno, res, buey, chuletón, solomillo, lomo, entrecot.
+- Verdura: ensalada, verdura, brócoli, espinaca, acelga, calabacín, zanahoria, tomate, pimiento, lechuga, rúcula, col, coliflor, apio, puerro, etc.
+- Fritura: cualquier receta con "frito", "empanizado", "rebozado", "croqueta", "tempura".
+
+=== METAS SEMANALES OBLIGATORIAS (14 comidas) ===
+- Pescado azul 2-3×/sem.
+- Legumbres 2-3×/sem.
+- Pollo o pavo 2-3×/sem.
+- Huevos 2-3×/sem.
+- Carne roja ≤1×/sem.
+- Verdura presente todos los días (comida Y cena). Cero días sin verdura en alguna comida.
+- Frituras ≤1-2×/sem. Priorizar horno, vapor, salteado, hervido, plancha suave.
+- Cenas ligeras (bajo HC, sin frituras, verduras + proteína magra).
+- Almuerzo es la comida más completa; cenas más livianas.
+- Variedad: no repetir la misma proteína 2 días seguidos.
+- Aceite de oliva como grasa principal.
+
+=== REGLAS DE USO DEL CATÁLOGO ===
+- Usá SOLO recetas del catálogo. El nombre tiene que COINCIDIR EXACTAMENTE con uno de la lista.
+- Si una receta suena a cena ligera (cremas, tortillas, ensaladas, plancha), priorizala para ese slot. Si suena a plato fuerte (guisos, pasta, arroces, legumbres, carnes), priorizala para almuerzo.
+- Si no hay suficientes recetas para cumplir TODAS las metas simultáneamente, priorizá las más importantes (pescado azul 2×, legumbres 2×, verdura diaria, frituras ≤1×) y relajá las demás.
+- Si el catálogo tiene <14 recetas distintas, podés repetir recetas en días diferentes (es OK, siempre que respeten variedad de proteína).
+
+=== ESTRUCTURA DE SALIDA (JSON estricto, sin markdown) ===
+Devolvé SOLO este objeto (sin texto antes ni después):
+
+{
+  "menu_propuesto": {
+    "lunes":    {"comida": "<nombre exacto>", "cena": "<nombre exacto>"},
+    "martes":   {"comida": "<nombre exacto>", "cena": "<nombre exacto>"},
+    "miercoles":{"comida": "<nombre exacto>", "cena": "<nombre exacto>"},
+    "jueves":   {"comida": "<nombre exacto>", "cena": "<nombre exacto>"},
+    "viernes":  {"comida": "<nombre exacto>", "cena": "<nombre exacto>"},
+    "sabado":   {"comida": "<nombre exacto>", "cena": "<nombre exacto>"},
+    "domingo":  {"comida": "<nombre exacto>", "cena": "<nombre exacto>"}
+  },
+  "resumen": "2 frases amigables con lo que se priorizó."
+}
+
+Notas:
+- NO incluyas campos extra (cumple_metas, advertencias, etc.). Solo esos 2 campos.
+- Si una celda no tiene buena opción, igual pon la mejor disponible usando el catálogo.
+- Respondé SIEMPRE en español, tuteando. Output lo más corto posible.`,
+
+  // ============================================
+  // Propone un menú semanal completo respetando las metas nutricionales.
+  // Recibe las recetas del catálogo (de Recipes.getAll()) y el menú actual.
+  // Devuelve {menu_propuesto, resumen, cumple_metas, advertencias}.
+  // ============================================
+  async proposeWeekMenu(recipes, currentWeek) {
+    // v37: solo mandamos los NOMBRES de las recetas (sin tipo, sin tags, sin
+    // macros). La IA tiene que inferir las categorías nutricionales por el
+    // nombre (salmón = pescado azul, lentejas = legumbres, etc.). Esto reduce
+    // drásticamente el body y deja al endpoint MiniMax generar más rápido.
+    // Las kcal/macros y la verificación fina de cumplimiento de metas las
+    // calcula NutritionPanel en el cliente sobre la propuesta recibida.
+    const catalog = recipes.map(r => `- "${r.nombre}"`).join('\n');
+
+    // Menú actual (para que la IA vea qué hay y proponga cambios coherentes)
+    const dayNames = { monday: 'lunes', tuesday: 'martes', wednesday: 'miercoles',
+                       thursday: 'jueves', friday: 'viernes', saturday: 'sabado', sunday: 'domingo' };
+    let currentMenuTxt = '(vacío — propuesta desde cero)';
+    if (currentWeek && typeof currentWeek === 'object') {
+      // Aceptamos dos formatos: ids (Menu.getCurrentWeek()) o ya resuelto a nombres.
+      // Si recibimos string ids, el caller debe pasar `currentWeek` como map {day:{meal: nombre}}
+      // o {day:{meal: id}}. Detectamos heurísticamente.
+      const looksResolved = Object.values(currentWeek).some(d => {
+        const meal = d?.lunch ?? d?.comida;
+        return meal && typeof meal === 'string' && recipes.some(r => r.nombre === meal);
+      });
+      const lines = Object.keys(currentWeek).map(day => {
+        const d = currentWeek[day] || {};
+        const lunchId = d.lunch ?? d.comida ?? null;
+        const dinnerId = d.dinner ?? d.cena ?? null;
+        const lunchName = !lunchId ? '—'
+          : looksResolved ? lunchId
+          : (recipes.find(r => r.id === lunchId)?.nombre || '—');
+        const dinnerName = !dinnerId ? '—'
+          : looksResolved ? dinnerId
+          : (recipes.find(r => r.id === dinnerId)?.nombre || '—');
+        const esDay = dayNames[day] || day;
+        return `${esDay}: comida=${lunchName} | cena=${dinnerName}`;
+      });
+      currentMenuTxt = lines.join('\n');
+    }
+
+    const userPrompt =
+      `=== CATÁLOGO DE RECETAS DISPONIBLES (${recipes.length}) ===\n${catalog}\n\n` +
+      `=== MENÚ ACTUAL DE LA SEMANA ===\n${currentMenuTxt}\n\n` +
+      `Proponé el mejor menú semanal posible respetando las metas nutricionales.`;
+
+    const text = await this.call([
+      { role: 'system', content: this.systemPromptProposeMenu },
+      { role: 'user', content: userPrompt },
+    ], { json: true, temperature: 0.7, timeout: 90000 });
+    return this.extractJson(text);
+  },
+
+  // Chat libre con contexto de menú y recetas disponibles
+  async chatMenu(userMessage, ctx) {
+    const recipes = ctx.recipes || [];
+    const recipesList = recipes.map(r => `- ${r.nombre} (${r.tipo_comida || 'ambos'})`).join('\n');
+    const currentMenu = ctx.currentMenu || {};
+
+    const userPrompt = `Recetas disponibles (${recipes.length}):
+${recipesList}
+
+Menú actual:
+${JSON.stringify(currentMenu, null, 2)}
+
+Usuario dice: "${userMessage}"`;
+
+    const text = await this.call([
+      { role: 'system', content: this.systemPromptMenu },
+      { role: 'user', content: userPrompt },
+    ], { json: true });
+
+    return this.extractJson(text);
+  },
+};

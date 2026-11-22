@@ -1,0 +1,2839 @@
+// ============================================
+// App — Main Router + Controller
+// ============================================
+
+const App = {
+  currentView: 'menu',
+  currentRecipeId: null,
+  pendingMeal: null, // For assigning recipes: { day, mealType }
+
+  // Version visible en el footer. Cambiá este string cada vez que hagas
+  // commit+push para poder verificar si el celular esta sincronizado.
+  VERSION: 'v49 (2026-11-19)',
+
+  // ============================================
+  // Initialize
+  // ============================================
+  async init() {
+    // Init modules (from localStorage — instant)
+    Recipes.init();
+    Menu.init();
+    if (typeof Templates !== 'undefined') Templates.init();
+    if (typeof Shopping !== 'undefined') Shopping.init();
+    if (typeof Prep !== 'undefined') Prep.init();
+    if (typeof AI !== 'undefined') AI.init();
+
+    this._setupEventListeners();
+
+    // Supabase: setup + (si ya hay user logueado) pullAll + subscribe
+    let dbOk = false;
+    try {
+      dbOk = await DB.init();
+    } catch (err) {
+      console.error('Error iniciando Supabase:', err);
+    }
+
+    if (!dbOk || !DB.client) {
+      // Supabase no se cargo (CDN fallo o error de config).
+      // Mostramos mensaje visible en vez de dejar la app vacia.
+      this.currentView = 'signin';
+      this._renderFatalError(
+        'No se pudo conectar con Supabase. ' +
+        'Revisa tu conexion a internet y recarga la pagina.'
+      );
+      return;
+    }
+
+    // DB OK — si hay user en localStorage, ir directo al menú; si no, signin.
+    if (DB.isAuth()) {
+      this._handleRoute();
+    } else {
+      this.currentView = 'signin';
+      DB.renderSignInView();
+    }
+
+    // Listen for hash changes
+    window.addEventListener('hashchange', () => this._handleRoute());
+  },
+
+  // Muestra un mensaje de error visible en la UI
+  _renderFatalError(message) {
+    const main = document.getElementById('main-content');
+    if (main) {
+      main.innerHTML = `
+        <div class="signin-view">
+          <div class="signin-card">
+            <div class="signin-card__icon">⚠️</div>
+            <h2 class="signin-card__title">No se pudo cargar la app</h2>
+            <p class="signin-card__hint">${Components.escapeHtml(message)}</p>
+            <button class="btn btn--primary btn--full" onclick="location.reload()">
+              Reintentar
+            </button>
+          </div>
+        </div>`;
+    }
+    // Ocultar nav tabs (no se puede navegar sin DB)
+    const nav = document.getElementById('nav-tabs');
+    if (nav) nav.classList.add('hidden');
+  },
+
+  // ============================================
+  // Event Listeners
+  // ============================================
+  _setupEventListeners() {
+    // Navigation tabs
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const view = tab.dataset.view;
+        this.navigate(view);
+      });
+    });
+
+    // Back button
+    document.getElementById('btn-back').addEventListener('click', () => {
+      this.navigate('menu');
+    });
+
+    // Modal close
+    document.getElementById('modal-close').addEventListener('click', () => {
+      Components.modal.close();
+    });
+
+    document.getElementById('modal-backdrop').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) {
+        Components.modal.close();
+      }
+    });
+
+    // ESC to close modal
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        Components.modal.close();
+      }
+    });
+  },
+
+  // ============================================
+  // Routing
+  // ============================================
+  _handleRoute() {
+    const hash = window.location.hash || '#menu';
+    const parts = hash.slice(1).split('/');
+    const route = parts[0];
+
+    switch (route) {
+      case 'menu':
+        this.renderMenuView();
+        break;
+      case 'recipes':
+        this.renderRecipesView();
+        break;
+      case 'template':
+        this.renderTemplateView();
+        break;
+      case 'shopping':
+        this.renderShoppingView();
+        break;
+      case 'tickets':
+        this.renderTicketsView();
+        break;
+      case 'prep':
+        this.renderPrepView();
+        break;
+      case 'recipe':
+        const id = parts[1];
+        if (id === 'new') {
+          this.renderRecipeForm();
+        } else {
+          this.renderRecipeDetail(id);
+        }
+        break;
+      default:
+        this.renderMenuView();
+    }
+  },
+
+  navigate(view, params = {}) {
+    switch (view) {
+      case 'menu':
+        window.location.hash = 'menu';
+        break;
+      case 'recipes':
+        window.location.hash = 'recipes';
+        break;
+      case 'template':
+        window.location.hash = 'template';
+        break;
+      case 'shopping':
+        window.location.hash = 'shopping';
+        break;
+      case 'tickets':
+        window.location.hash = 'tickets';
+        break;
+      case 'prep':
+        window.location.hash = 'prep';
+        break;
+      case 'recipe':
+        if (params.id) {
+          window.location.hash = `recipe/${params.id}`;
+        } else {
+          window.location.hash = 'recipe/new';
+        }
+        break;
+    }
+  },
+
+  // ============================================
+  // View: Menu
+  // ============================================
+  renderMenuView() {
+    this.currentView = 'menu';
+    this._updateNav('menu');
+    this._updateHeader(T.menu.title, false);
+    this._showShoppingListBtn();
+    
+    const main = document.getElementById('main-content');
+    
+    // Week navigation
+    let html = `
+      <div class="week-nav">
+        <button class="week-nav__btn" onclick="App.prevWeek()" aria-label="Semana anterior">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6"/>
+          </svg>
+        </button>
+        <span class="week-nav__label">${Menu.getWeekLabel()}</span>
+        <button class="week-nav__btn" onclick="App.nextWeek()" aria-label="Semana siguiente">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
+        </button>
+      </div>
+    `;
+
+    // Days grid
+    html += `
+      <div class="drag-hint">
+        <span class="drag-hint__icon">⠿</span>
+        Mantené apretado y arrastrá una receta a otra celda para moverla
+      </div>
+    `;
+    html += '<div class="menu-grid">';
+    
+    const daysOrder = Store.getDaysOrder();
+    const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+    
+    daysOrder.forEach((day, index) => {
+      const week = Menu.getCurrentWeek();
+      const dayMeals = week[day] || {};
+      
+      html += `
+        <div class="menu-day">
+          <div class="menu-day__header">${dayNames[index]}</div>
+          <div class="menu-day__meals">
+      `;
+      
+      Store.getMealTypes().forEach(mealType => {
+        const recipeId = dayMeals[mealType];
+        const recipe = recipeId ? Recipes.getById(recipeId) : null;
+        html += Components.mealCell(mealType, recipe, { day });
+      });
+      
+      html += `
+          </div>
+        </div>
+      `;
+    });
+    
+    html += '</div>';
+
+    // Panel nutricional local (instantáneo, sin IA)
+    html += NutritionPanel.render(Menu.getCurrentWeek(), Recipes.getAll());
+
+    // Acciones de IA sobre el menú (proponer / analizar)
+    html += this._renderAiMenuCta();
+
+    // Acciones de plantilla (guardar / aplicar / duplicar)
+    html += this._renderTemplateActions();
+
+    // Acceso rápido a la lista de la compra
+    if (typeof Shopping !== 'undefined') {
+      const nItems = Shopping.buildList().length;
+      html += `
+        <button class="btn btn--secondary btn--full" style="margin-top: 8px;" onclick="App.navigate('shopping')">
+          🛒 Ver lista de la compra${nItems ? ` (${nItems})` : ''}
+        </button>`;
+    }
+
+    // Plan de preparación (qué día cocinar cada cosa)
+    if (typeof Prep !== 'undefined') {
+      const plan = Prep.buildPlan();
+      html += `
+        <button class="btn btn--secondary btn--full" style="margin-top: 8px;" onclick="App.navigate('prep')">
+          🍳 Plan de preparación${plan.sesiones.length ? ` (${plan.sesiones.length} sesiones)` : ''}
+        </button>`;
+    }
+
+    html += this._renderFooter();
+
+    // Click handlers for meal cells
+    main.innerHTML = html;
+    this._attachMealCellListeners();
+
+    // Botón flotante del chat IA
+    this._renderChatButton();
+  },
+
+  // Analiza el menú actual con el agente IA. Usa cache 24h.
+  async analyzeCurrentWeek() {
+    if (!AI.hasKey()) {
+      Components.toast.show('Configurá tu API key en Ajustes → 🤖 Agente IA');
+      return;
+    }
+    const wk = Menu.getWeekKey();
+    const cacheKey = `menuapp_week_analysis_${wk}`;
+    const cachedRaw = localStorage.getItem(cacheKey);
+    let cached = null;
+    if (cachedRaw) {
+      try {
+        const parsed = JSON.parse(cachedRaw);
+        if (parsed && parsed.generatedAt && (Date.now() - parsed.generatedAt) < 24 * 60 * 60 * 1000) {
+          cached = parsed;
+        }
+      } catch {}
+    }
+
+    if (cached) {
+      this._showAnalysisModal(cached, /* fromCache */ true);
+      return;
+    }
+
+    this._showAnalysisLoadingModal();
+    try {
+      const result = await AI.analyzeWeek(Menu.getCurrentWeek(), Recipes.getAll());
+      const toCache = { ...result, generatedAt: Date.now() };
+      localStorage.setItem(cacheKey, JSON.stringify(toCache));
+      this._showAnalysisModal(toCache, false);
+    } catch (err) {
+      Components.modal.close();
+      Components.toast.show('❌ ' + err.message);
+    }
+  },
+
+  _showAnalysisLoadingModal() {
+    Components.modal.open('📊 Análisis de la semana', `
+      <div style="text-align: center; padding: 32px 0;">
+        <span class="ai-spinner"></span>
+        <p style="margin-top: 16px; color: var(--color-text-muted);">Analizando menú…</p>
+      </div>
+    `);
+  },
+
+  _showAnalysisModal(data, fromCache) {
+    const ageMin = fromCache ? Math.floor((Date.now() - data.generatedAt) / 60000) : 0;
+    const ageText = fromCache
+      ? (ageMin < 1 ? 'recién generado' : ageMin < 60 ? `hace ${ageMin} min` : `hace ${Math.floor(ageMin / 60)} h`)
+      : 'recién generado';
+
+    const renderList = (arr) =>
+      (arr || []).map(s => `<li>${Components.escapeHtml(s)}</li>`).join('');
+
+    // Color del score: verde >=80, amarillo 60-79, naranja 40-59, rojo <40
+    const score = typeof data.puntuacion_global === 'number' ? data.puntuacion_global : null;
+    const scoreClass = score == null ? ''
+      : score >= 80 ? 'week-analysis__score--great'
+      : score >= 60 ? 'week-analysis__score--ok'
+      : score >= 40 ? 'week-analysis__score--warn'
+      : 'week-analysis__score--bad';
+
+    const subs = data.propuestas_de_sustitucion || [];
+
+    Components.modal.open('📊 Análisis de la semana', `
+      <div class="week-analysis">
+        <p class="week-analysis__age">${ageText}</p>
+
+        ${score != null ? `
+          <div class="week-analysis__score ${scoreClass}">
+            <div class="week-analysis__score-num">${score}</div>
+            <div class="week-analysis__score-label">/ 100</div>
+          </div>
+        ` : ''}
+
+        ${data.resumen ? `<p class="week-analysis__resumen">${Components.escapeHtml(data.resumen)}</p>` : ''}
+
+        ${(data.alertas_seguridad || []).length ? `
+          <div class="week-analysis__alerts">
+            <h4>🚨 Alertas de seguridad</h4>
+            <ul>${renderList(data.alertas_seguridad)}</ul>
+          </div>
+        ` : ''}
+
+        ${(data.bueno || []).length ? `
+          <div class="week-analysis__section week-analysis__section--good">
+            <h4>✅ Lo bueno</h4>
+            <ul>${renderList(data.bueno)}</ul>
+          </div>
+        ` : ''}
+
+        ${(data.equilibrado || []).length ? `
+          <div class="week-analysis__section week-analysis__section--neutral">
+            <h4>⚖️ Equilibrado</h4>
+            <ul>${renderList(data.equilibrado)}</ul>
+          </div>
+        ` : ''}
+
+        ${(data.malo || []).length ? `
+          <div class="week-analysis__section week-analysis__section--bad">
+            <h4>⚠️ A revisar</h4>
+            <ul>${renderList(data.malo)}</ul>
+          </div>
+        ` : ''}
+
+        ${subs.length ? `
+          <div class="week-analysis__section week-analysis__section--subs">
+            <h4>💡 Sustituciones sugeridas</h4>
+            ${subs.map(s => `
+              <div class="week-analysis__sub">
+                <div class="week-analysis__sub-where"><strong>${Components.escapeHtml(s.donde || '')}</strong></div>
+                <div class="week-analysis__sub-problem">${Components.escapeHtml(s.problema || '')}</div>
+                <ul class="week-analysis__sub-opts">
+                  ${(s.opciones || []).map(o => `<li>${Components.escapeHtml(o)}</li>`).join('')}
+                </ul>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+
+        <button class="btn btn--secondary btn--full" style="margin-top: 16px;"
+                onclick="App.reAnalyzeCurrentWeek()">
+          🔄 Re-analizar
+        </button>
+      </div>
+    `);
+  },
+
+  async reAnalyzeCurrentWeek() {
+    const wk = Menu.getWeekKey();
+    localStorage.removeItem(`menuapp_week_analysis_${wk}`);
+    await this.analyzeCurrentWeek();
+  },
+
+  // Acciones de IA sobre el menú: proponer uno nuevo o analizar el actual
+  _renderAiMenuCta() {
+    const hasKey = (typeof AI !== 'undefined' && AI.hasKey && AI.hasKey());
+    const hint = hasKey
+      ? ''
+      : '<p class="ai-menu-cta__hint">Configurá tu API key en Ajustes → 🤖 Agente IA</p>';
+    return `
+      <div class="ai-menu-cta">
+        <button class="btn btn--ai btn--full" onclick="App.proposeWeekMenu()" ${hasKey ? '' : 'disabled style="opacity:.5"'}>
+          ✨ Proponer menú semanal con IA
+        </button>
+        ${hint}
+      </div>
+    `;
+  },
+
+  // ============================================
+  // IA: proponer un menú semanal completo respetando metas nutricionales
+  // ============================================
+  async proposeWeekMenu() {
+    if (!AI.hasKey()) {
+      Components.toast.show('Configurá tu API key en Ajustes → 🤖 Agente IA');
+      return;
+    }
+    const recipes = Recipes.getAll();
+    if (recipes.length < 3) {
+      Components.toast.show('Necesitás al menos 3 recetas para generar un menú. Agregá más a tu catálogo.');
+      return;
+    }
+
+    // Advertir si la semana actual tiene contenido (lo va a sobrescribir)
+    const week = Menu.getCurrentWeek();
+    let occupied = 0;
+    Store.getDaysOrder().forEach(d => {
+      if (week?.[d]?.lunch) occupied++;
+      if (week?.[d]?.dinner) occupied++;
+    });
+    if (occupied > 0) {
+      if (!confirm(`Esta semana tiene ${occupied} comida(s) ya asignada(s). La IA va a proponer un menú completo que sobrescribirá lo actual. ¿Continuar?`)) {
+        return;
+      }
+    }
+
+    Components.modal.open('✨ Proponiendo menú…', `
+      <div style="text-align: center; padding: var(--space-lg);">
+        <span class="ai-spinner"></span>
+        <p style="margin-top: 16px; color: var(--color-text-muted);">
+          Armando el mejor menú posible con ${recipes.length} receta(s) del catálogo…
+        </p>
+        <p style="margin-top: 8px; font-size: 12px; color: var(--color-text-muted);">
+          Respetando metas: pescado azul 2-3×, legumbres 2-3×, verdura diaria, cenas ligeras.
+        </p>
+      </div>
+    `);
+
+    try {
+      // Pasamos el menú actual con NOMBRES ya resueltos (no ids) para que la IA
+      // pueda leerlo directamente sin tener que conocer el formato interno.
+      const dayMap = { monday: 'monday', tuesday: 'tuesday', wednesday: 'wednesday',
+                       thursday: 'thursday', friday: 'friday', saturday: 'saturday', sunday: 'sunday' };
+      const resolved = {};
+      Object.values(dayMap).forEach(d => {
+        resolved[d] = {
+          lunch: week?.[d]?.lunch ? (Recipes.getById(week[d].lunch)?.nombre || null) : null,
+          dinner: week?.[d]?.dinner ? (Recipes.getById(week[d].dinner)?.nombre || null) : null,
+        };
+      });
+
+      const result = await AI.proposeWeekMenu(recipes, resolved);
+      this._showProposedMenuModal(result, recipes);
+    } catch (err) {
+      console.error('[proposeWeekMenu]', err);
+      Components.modal.open('✨ Error', `
+        <div style="padding: var(--space-md);">
+          <p style="color: var(--color-error); margin-bottom: 12px;">❌ ${Components.escapeHtml(err.message)}</p>
+          <p style="font-size: 13px; color: var(--color-text-muted); margin-bottom: 16px;">
+            Verificá que la API key esté bien y que tengas conexión a internet.
+          </p>
+          <button class="btn btn--primary btn--full" onclick="Components.modal.close()">Cerrar</button>
+        </div>
+      `);
+    }
+  },
+
+  // Modal de preview del menú propuesto por la IA
+  _showProposedMenuModal(result, recipes) {
+    const mp = result?.menu_propuesto;
+    if (!mp || typeof mp !== 'object') {
+      Components.modal.open('✨ Sin propuesta', `
+        <div style="padding: var(--space-md);">
+          <p>La IA no devolvió una propuesta válida.</p>
+          <button class="btn btn--primary btn--full" onclick="Components.modal.close()">Cerrar</button>
+        </div>
+      `);
+      return;
+    }
+
+    const days = [
+      ['lunes', 'Lun'], ['martes', 'Mar'], ['miercoles', 'Mié'],
+      ['jueves', 'Jue'], ['viernes', 'Vie'], ['sabado', 'Sáb'], ['domingo', 'Dom'],
+    ];
+    const dayKeyEsToEn = { lunes:'monday', martes:'tuesday', miercoles:'wednesday',
+                           jueves:'thursday', viernes:'friday', sabado:'saturday', domingo:'sunday' };
+
+    // Detectar recetas que la IA devolvió pero no existen en el catálogo
+    const byName = new Map(recipes.map(r => [r.nombre.toLowerCase(), r]));
+    const missingByDay = {};
+    let totalMissing = 0;
+    days.forEach(([key]) => {
+      const d = mp[key];
+      if (!d) return;
+      const missing = [];
+      if (d.comida && !byName.has(d.comida.toLowerCase())) missing.push(d.comida);
+      if (d.cena && !byName.has(d.cena.toLowerCase())) missing.push(d.cena);
+      if (missing.length) {
+        missingByDay[key] = missing;
+        totalMissing += missing.length;
+      }
+    });
+
+    const rowsHtml = days.map(([key, label]) => {
+      const d = mp[key];
+      if (!d) return '';
+      const hasMissing = missingByDay[key];
+      const c = d.comida
+        ? `<span class="prop-menu__cell ${hasMissing?.includes(d.comida) ? 'prop-menu__cell--missing' : ''}">${Components.escapeHtml(d.comida)}</span>`
+        : '<span class="prop-menu__cell prop-menu__cell--empty">—</span>';
+      const ce = d.cena
+        ? `<span class="prop-menu__cell ${hasMissing?.includes(d.cena) ? 'prop-menu__cell--missing' : ''}">${Components.escapeHtml(d.cena)}</span>`
+        : '<span class="prop-menu__cell prop-menu__cell--empty">—</span>';
+      return `
+        <div class="prop-menu__row">
+          <span class="prop-menu__day">${label}</span>
+          <div class="prop-menu__meals">
+            <div class="prop-menu__meal"><span class="prop-menu__meal-label">Comida</span>${c}</div>
+            <div class="prop-menu__meal"><span class="prop-menu__meal-label">Cena</span>${ce}</div>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Calcular cumplimiento de metas EN EL CLIENTE con NutritionPanel.
+    // Esto evita que la IA tenga que generar esos datos (más rápido y más fiable).
+    const proposedWeek = { monday:{lunch:null,dinner:null}, tuesday:{lunch:null,dinner:null},
+                           wednesday:{lunch:null,dinner:null}, thursday:{lunch:null,dinner:null},
+                           friday:{lunch:null,dinner:null}, saturday:{lunch:null,dinner:null},
+                           sunday:{lunch:null,dinner:null} };
+    days.forEach(([esKey]) => {
+      const enKey = dayKeyEsToEn[esKey];
+      const d = mp[esKey];
+      if (!d) return;
+      if (d.comida) {
+        const r = byName.get(d.comida.toLowerCase());
+        if (r) proposedWeek[enKey].lunch = r.id;
+      }
+      if (d.cena) {
+        const r = byName.get(d.cena.toLowerCase());
+        if (r) proposedWeek[enKey].dinner = r.id;
+      }
+    });
+    let metasHtml = '';
+    try {
+      const a = NutritionPanel.analyze(proposedWeek, recipes);
+      const pills = NutritionPanel.CATEGORIES.map(cat => {
+        const count = a.catCounts[cat.key] || 0;
+        const ok = count >= cat.metaMin && count <= cat.metaMax;
+        const cls = ok ? 'prop-menu__meta--ok' : 'prop-menu__meta--warn';
+        const icon = ok ? '✅' : count < cat.metaMin ? '⚠️' : '🚨';
+        return `<span class="prop-menu__meta ${cls}">${icon} ${Components.escapeHtml(cat.label)}: ${count} / ${cat.metaMin}${cat.metaMax !== cat.metaMin ? '–' + cat.metaMax : '+'}</span>`;
+      });
+      const verdStatus = a.diasVerduraCompleta === 7 ? 'ok' : 'warn';
+      pills.push(`<span class="prop-menu__meta prop-menu__meta--${verdStatus}">${verdStatus === 'ok' ? '✅' : '⚠️'} Verdura diaria: ${a.diasVerduraCompleta}/7 días</span>`);
+      pills.push(`<span class="prop-menu__meta prop-menu__meta--${a.friturasCount <= 2 ? 'ok' : 'warn'}">${a.friturasCount <= 2 ? '✅' : '⚠️'} Frituras: ${a.friturasCount}</span>`);
+      metasHtml = `<div class="prop-menu__metas">${pills.join('')}</div>`;
+    } catch (e) {
+      console.warn('[proposeWeekMenu] No pude calcular metas:', e);
+    }
+
+    const missingBanner = totalMissing > 0
+      ? `<div class="prop-menu__missing-banner">
+          ⚠️ ${totalMissing} receta(s) sugerida(s) no están en tu catálogo y se omitirán al aplicar:
+          ${Object.values(missingByDay).flat().slice(0, 4).map(m => `<code>${Components.escapeHtml(m)}</code>`).join(', ')}
+          ${totalMissing > 4 ? '…' : ''}
+        </div>`
+      : '';
+
+    // Guardamos la propuesta en App para que el botón la aplique de forma segura
+    // (evitamos inline JSON con comillas/saltos que rompen el onclick).
+    App._aiProposedMenu = mp;
+
+    Components.modal.open('✨ Propuesta de menú', `
+      <div class="prop-menu">
+        ${result.resumen ? `<p class="prop-menu__resumen">${Components.escapeHtml(result.resumen)}</p>` : ''}
+        ${missingBanner}
+        ${metasHtml}
+        <div class="prop-menu__grid">${rowsHtml}</div>
+        <div style="display: flex; gap: 8px; margin-top: 16px;">
+          <button class="btn btn--outline" onclick="Components.modal.close()">Cancelar</button>
+          <button class="btn btn--primary" style="flex: 1;" id="btn-apply-prop-menu">💾 Aplicar a esta semana</button>
+        </div>
+      </div>
+    `);
+
+    const btn = document.getElementById('btn-apply-prop-menu');
+    if (btn) btn.onclick = () => App.applyAiMenu(mp);
+  },
+
+  // Botones de plantilla que aparecen debajo del grid de la semana
+  _renderTemplateActions() {
+    const hasTpl = Templates.hasAny();
+    return `
+      <div class="template-actions">
+        <button class="btn btn--secondary btn--sm" onclick="App.saveCurrentAsTemplate()">
+          📋 Guardar como plantilla
+        </button>
+        <button class="btn btn--secondary btn--sm" onclick="App.applyTemplateToCurrent()"
+                ${hasTpl ? '' : 'disabled style="opacity:.5"'}>
+          🔁 Aplicar plantilla
+        </button>
+        <button class="btn btn--secondary btn--sm" onclick="App.duplicateWeekToOther()">
+          📅 Duplicar a otra semana
+        </button>
+        ${hasTpl ? `
+          <button class="btn btn--ghost btn--sm" onclick="App.navigate('template', {})">
+            ✏️ Editar plantilla
+          </button>
+        ` : ''}
+      </div>
+    `;
+  },
+
+  // Modal: pedir nombre y guardar semana actual como plantilla
+  saveCurrentAsTemplate() {
+    const current = Templates.getCurrent();
+    const defaultNombre = current?.nombre || 'Mi plantilla';
+    Components.modal.open('📋 Guardar como plantilla', `
+      <p style="color: var(--color-text-muted); margin-bottom: 12px;">
+        ${current
+          ? 'Vas a <strong>sobrescribir</strong> la plantilla existente con la semana actual.'
+          : 'Esto crea una plantilla nueva a partir de la semana actual.'}
+      </p>
+      <label style="font-size: 13px; color: var(--color-text-muted);">Nombre</label>
+      <input type="text" id="tpl-nombre" class="form-input"
+             value="${Components.escapeHtml(defaultNombre)}" style="margin-bottom: 12px;">
+      <label style="font-size: 13px; color: var(--color-text-muted);">Descripción (opcional)</label>
+      <input type="text" id="tpl-desc" class="form-input"
+             value="${Components.escapeHtml(current?.descripcion || '')}"
+             placeholder="Ej: semana típica de invierno" style="margin-bottom: 16px;">
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn--primary" onclick="App._confirmSaveTemplate()">Guardar</button>
+        <button class="btn btn--ghost" onclick="Components.modal.close()">Cancelar</button>
+      </div>
+    `);
+    setTimeout(() => document.getElementById('tpl-nombre')?.focus(), 100);
+  },
+
+  _confirmSaveTemplate() {
+    const nombre = document.getElementById('tpl-nombre')?.value.trim() || 'Mi plantilla';
+    const descripcion = document.getElementById('tpl-desc')?.value.trim() || '';
+    const cur = Templates.getCurrent();
+    if (cur) {
+      Templates.updateMeta(nombre, descripcion);
+      Templates.overwriteFromWeek(Menu.getCurrentWeek());
+    } else {
+      Templates.createFromWeek(Menu.getCurrentWeek(), nombre, descripcion);
+    }
+    Components.modal.close();
+    Components.toast.show('✅ Plantilla guardada');
+    // FIX #5: si veníamos de la vista plantilla, quedarse ahí en vez de
+    // saltar al menú (antes hacía renderMenuView() siempre).
+    if (this.currentView === 'template') this.renderTemplateView();
+    else this.renderMenuView();
+  },
+
+  // Crea la plantilla de ejemplo ("Semana tipo") desde el catálogo.
+  // Las celdas cuyo plato no exista en tus recetas quedan vacías.
+  createTemplateFromExample() {
+    const res = Templates.createFromExample();
+    const faltan = res.faltan.length
+      ? ` — no encontré: ${res.faltan.join(', ')}`
+      : '';
+    Components.toast.show(`✅ Plantilla "${res.template.nombre}" creada${faltan}`);
+    this.renderTemplateView();
+  },
+
+  // Aplica la plantilla a la semana actual
+  applyTemplateToCurrent() {
+    if (!Templates.hasAny()) {
+      Components.toast.show('No hay plantilla guardada');
+      return;
+    }
+    if (!confirm('¿Sobrescribir la semana actual con la plantilla?')) return;
+    Templates.applyToCurrentWeek();
+    Components.modal.close();
+    Components.toast.show('✅ Plantilla aplicada');
+    this.renderMenuView();
+  },
+
+  // Modal para elegir semana destino y duplicar la actual
+  duplicateWeekToOther() {
+    const weeks = Templates.getNearbyWeeks(4);
+    Components.modal.open('📅 Duplicar a otra semana', `
+      <p style="color: var(--color-text-muted); margin-bottom: 12px;">
+        Copia la semana actual a:
+      </p>
+      <select id="dup-target" class="form-input" style="margin-bottom: 16px;">
+        ${weeks.map(w => `<option value="${w.key}">${w.label}</option>`).join('')}
+      </select>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn--primary" onclick="App._confirmDuplicateWeek()">Duplicar</button>
+        <button class="btn btn--ghost" onclick="Components.modal.close()">Cancelar</button>
+      </div>
+    `);
+  },
+
+  _confirmDuplicateWeek() {
+    const target = document.getElementById('dup-target')?.value;
+    if (!target) return;
+    if (Menu._menu[target]) {
+      if (!confirm('Esa semana ya tiene menú. ¿Sobrescribir?')) return;
+    }
+    Templates.duplicateCurrentWeekTo(target);
+    Components.modal.close();
+    Components.toast.show(`✅ Copiado a ${target}`);
+  },
+
+  // Botón flotante que abre el chat IA
+  _renderChatButton() {
+    // Quitar uno previo si existe
+    const existing = document.getElementById('ai-chat-fab');
+    if (existing) existing.remove();
+
+    const fab = document.createElement('button');
+    fab.id = 'ai-chat-fab';
+    fab.className = 'ai-chat-fab';
+    fab.innerHTML = '🤖';
+    fab.title = 'Chat con agente IA';
+    fab.onclick = () => App.openAiChat();
+    document.body.appendChild(fab);
+  },
+
+  // Abre el chat IA en un modal
+  async openAiChat() {
+    if (!AI.hasKey()) {
+      Components.toast.show('Configurá tu API key en Ajustes → 🤖 Agente IA');
+      return;
+    }
+
+    // Modal con la UI del chat
+    Components.modal.open('🤖 Agente IA', `
+      <div class="ai-chat">
+        <div class="ai-chat__messages" id="ai-chat-messages">
+          <div class="ai-chat__msg ai-chat__msg--agent">
+            Hola! Puedo sugerirte un menú para la semana. Decime qué tipo de cocina te gusta, cuántos días, si querés cenas light, etc.
+          </div>
+        </div>
+        <div class="ai-chat__input-wrap">
+          <input type="text" id="ai-chat-input" class="form-input"
+                 placeholder="Ej: Menu ligero para 3 días, cenas sin carbos..."
+                 onkeydown="if(event.key==='Enter') App.sendAiMessage()">
+          <button class="btn btn--primary" onclick="App.sendAiMessage()">Enviar</button>
+        </div>
+      </div>
+    `);
+
+    // Focus en el input
+    setTimeout(() => document.getElementById('ai-chat-input')?.focus(), 200);
+  },
+
+  async sendAiMessage() {
+    const input = document.getElementById('ai-chat-input');
+    const msgEl = document.getElementById('ai-chat-messages');
+    if (!input || !msgEl) return;
+    const text = input.value.trim();
+    if (!text) return;
+
+    // Pintar mensaje del usuario
+    msgEl.insertAdjacentHTML('beforeend', `
+      <div class="ai-chat__msg ai-chat__msg--user">${Components.escapeHtml(text)}</div>
+    `);
+    input.value = '';
+    msgEl.scrollTop = msgEl.scrollHeight;
+
+    // Indicador "pensando"
+    const thinkingId = 'ai-thinking-' + Date.now();
+    msgEl.insertAdjacentHTML('beforeend', `
+      <div class="ai-chat__msg ai-chat__msg--agent" id="${thinkingId}">
+        <span class="ai-spinner ai-spinner--inline"></span> Pensando...
+      </div>
+    `);
+    msgEl.scrollTop = msgEl.scrollHeight;
+
+    try {
+      const result = await AI.chatMenu(text, {
+        recipes: Recipes.getAll().map(r => ({
+          nombre: r.nombre,
+          tipo_comida: r.tipoComida,
+        })),
+        currentMenu: Menu.getCurrentWeek(),
+      });
+
+      // Reemplazar el "pensando" con la respuesta
+      const thinking = document.getElementById(thinkingId);
+      if (thinking) thinking.remove();
+
+      // Si hay menu propuesto, pintarlo como una card con botón Aplicar
+      let menuCardHtml = '';
+      if (result.menu_propuesto && typeof result.menu_propuesto === 'object') {
+        const mp = result.menu_propuesto;
+        const days = [['lunes','Lun'],['martes','Mar'],['miercoles','Mié'],['jueves','Jue'],['viernes','Vie'],['sabado','Sáb'],['domingo','Dom']];
+        const rows = days.map(([k, label]) => {
+          const d = mp[k];
+          if (!d) return '';
+          const c = d.comida ? `<strong>Comida:</strong> ${Components.escapeHtml(d.comida)}` : '';
+          const ce = d.cena ? `<strong>Cena:</strong> ${Components.escapeHtml(d.cena)}` : '';
+          return `<div class="ai-chat__menu-row"><span class="ai-chat__menu-day">${label}</span><span>${c}${c && ce ? ' · ' : ''}${ce}</span></div>`;
+        }).filter(Boolean).join('');
+
+        if (rows) {
+          menuCardHtml = `
+            <div class="ai-chat__menu-card">
+              <div style="font-weight:600; margin-bottom: 8px;">📋 Propuesta de menú</div>
+              ${rows}
+              <button class="btn btn--primary btn--sm" style="margin-top: 12px; width: 100%;"
+                      onclick='App.applyAiMenu(${JSON.stringify(mp).replace(/'/g, "&apos;")})'>
+                💾 Aplicar este menú a esta semana
+              </button>
+            </div>`;
+        }
+      }
+
+      msgEl.insertAdjacentHTML('beforeend', `
+        <div class="ai-chat__msg ai-chat__msg--agent">
+          ${Components.escapeHtml(result.respuesta || '(sin respuesta)')}
+          ${menuCardHtml}
+        </div>
+      `);
+      msgEl.scrollTop = msgEl.scrollHeight;
+    } catch (err) {
+      const thinking = document.getElementById(thinkingId);
+      if (thinking) thinking.remove();
+      msgEl.insertAdjacentHTML('beforeend', `
+        <div class="ai-chat__msg ai-chat__msg--agent" style="color: var(--color-error);">
+          ❌ ${Components.escapeHtml(err.message)}
+        </div>
+      `);
+      msgEl.scrollTop = msgEl.scrollHeight;
+    }
+  },
+
+  // Aplica un menu propuesto por la IA a la semana actual
+  async applyAiMenu(menuPropuesto) {
+    // menuPropuesto viene como {lunes: {comida, cena}, ...}
+    // Necesito mapear a {monday: {lunch, dinner}, ...} y resolver IDs
+    const dayMap = {
+      lunes: 'monday', martes: 'tuesday', miercoles: 'wednesday',
+      jueves: 'thursday', viernes: 'friday', sabado: 'saturday', domingo: 'sunday',
+    };
+    const menuData = {};
+    let found = 0, missing = [];
+
+    for (const [esDay, enDay] of Object.entries(dayMap)) {
+      const day = menuPropuesto[esDay];
+      if (!day) continue;
+      menuData[enDay] = { lunch: null, dinner: null };
+
+      if (day.comida) {
+        const r = Recipes.getAll().find(x => x.nombre.toLowerCase() === day.comida.toLowerCase());
+        if (r) { menuData[enDay].lunch = r.id; found++; }
+        else missing.push(`${esDay} comida: ${day.comida}`);
+      }
+      if (day.cena) {
+        const r = Recipes.getAll().find(x => x.nombre.toLowerCase() === day.cena.toLowerCase());
+        if (r) { menuData[enDay].dinner = r.id; found++; }
+        else missing.push(`${esDay} cena: ${day.cena}`);
+      }
+    }
+
+    if (missing.length > 0) {
+      Components.toast.show(`⚠️ ${missing.length} recetas no encontradas: ${missing.slice(0,2).join(', ')}${missing.length>2?'...':''}`);
+    }
+
+    // Guardar localmente + disparar sync hook (DB.pushMenu) automáticamente
+    // via Menu._save() → Store.set → sync hook. Antes se hacía un push directo
+    // y se asignaba Menu._menu sin persistir localmente, lo que provocaba
+    // pérdida del menú si la nube rechazaba el upsert.
+    const wk = Menu.getWeekKey();
+    Menu._menu[wk] = menuData;
+    Menu._save();
+
+    Components.toast.show(`✅ Menú aplicado (${found} celdas)`);
+    Components.modal.close();
+    App.renderMenuView();
+  },
+
+  _showShoppingListBtn() {
+    const menuBtn = document.getElementById('btn-menu');
+    menuBtn.innerHTML = `
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M4 6h16M4 12h10M4 18h16"/>
+      </svg>
+    `;
+    menuBtn.setAttribute('aria-label', 'Menú');
+    menuBtn.onclick = () => App.showMenuOptions();
+  },
+
+  showMenuOptions() {
+    const tplLabel = Templates.hasAny() ? '✏️ Editar plantilla' : '📋 Crear plantilla';
+    const optionsHtml = `
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button class="btn btn--secondary btn--full" onclick="App.showShoppingList(); Components.modal.close();">
+          🛒 ${T.menu.shoppingList}
+        </button>
+        <button class="btn btn--secondary btn--full" onclick="Components.modal.close(); App.navigate('prep');">
+          🍳 ${T.menu.prepPlan}
+        </button>
+        <button class="btn btn--secondary btn--full" onclick="Components.modal.close(); App.navigate('tickets');">
+          🧾 Tickets de compra
+        </button>
+        <button class="btn btn--secondary btn--full" onclick="Components.modal.close(); App.navigate('template', {});">
+          ${tplLabel}
+        </button>
+        <button class="btn btn--secondary btn--full" onclick="App.showSettings();">
+          ⚙️ Ajustes / Sync
+        </button>
+      </div>
+    `;
+    Components.modal.open('Opciones', optionsHtml);
+  },
+
+  async showSettings() {
+    const html = await DB.renderSettings();
+    Components.modal.open('⚙️ Ajustes', html);
+  },
+
+  showShoppingList() {
+    this.navigate('shopping', {});
+  },
+
+  // ============================================
+  // View: Lista de la compra (con precios)
+  // ============================================
+  renderShoppingView() {
+    this.currentView = 'shopping';
+    this._updateNav(null);
+    this._updateHeader('🛒 Lista de la compra', true);
+
+    const main = document.getElementById('main-content');
+    const items = Shopping.buildList();
+    const wk = Menu.getWeekKey();
+
+    if (items.length === 0) {
+      main.innerHTML = `
+        <div class="signin-view" style="padding: 24px 16px;">
+          <div class="signin-card">
+            <div class="signin-card__icon">🛒</div>
+            <h2 class="signin-card__title">No hay recetas esta semana</h2>
+            <p class="signin-card__hint">Asigná recetas al menú y la lista se arma sola.</p>
+            <button class="btn btn--primary btn--full" onclick="App.navigate('menu')">
+              ← Ir al menú
+            </button>
+          </div>
+          ${this._renderFooter()}
+        </div>`;
+      return;
+    }
+
+    const total = Shopping.totalEstimado(items);
+    const sinPrecio = Shopping.sinPrecio(items);
+    const faltan = items.filter(i => i.comprado).length;
+
+    // agrupar por categoría
+    const porCat = new Map();
+    for (const it of items) {
+      if (!porCat.has(it.categoria)) porCat.set(it.categoria, []);
+      porCat.get(it.categoria).push(it);
+    }
+    const catInfo = c => Shopping.CATEGORIAS.find(x => x.key === c) || { label: 'Otros', icon: '📦' };
+
+    let html = `
+      <div class="week-nav">
+        <button class="week-nav__btn" onclick="App.prevWeek()" aria-label="Semana anterior">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6"/>
+          </svg>
+        </button>
+        <span class="week-nav__label">${Menu.getWeekLabel()}</span>
+        <button class="week-nav__btn" onclick="App.nextWeek()" aria-label="Semana siguiente">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="card shop-summary">
+        <div class="shop-summary__row">
+          <span>🛒 <strong>${items.length}</strong> productos</span>
+          <span>🏪 <strong>${new Set(items.filter(i => i.tienda).map(i => i.tienda.id)).size}</strong> tiendas</span>
+          <span>💶 <strong>${Shopping._precio(total)}</strong> estimado</span>
+        </div>
+        <div class="shop-summary__row shop-summary__row--muted">
+          ${sinPrecio.length ? `⚠️ ${sinPrecio.length} sin precio` : '✅ Todos los precios cargados'}
+          ${faltan ? ` · ✅ ${faltan} ya comprados` : ''}
+        </div>
+        <div class="shop-summary__actions">
+          <button class="btn btn--primary btn--sm" onclick="App.openAddProductModal()">➕ Producto</button>
+          <button class="btn btn--outline btn--sm" onclick="App.copyShoppingList()">📋 Copiar</button>
+          <button class="btn btn--outline btn--sm" onclick="App.showStoresModal()">🏪 Tiendas</button>
+          <button class="btn btn--outline btn--sm" onclick="App.showStoresByShop()">🗺️ Dónde comprar</button>
+          <button class="btn btn--outline btn--sm" onclick="App.openScanTicketModal()">📸 Ticket</button>
+        </div>
+      </div>
+
+      <button class="btn btn--ghost btn--full" style="margin-bottom: 12px;" onclick="App.navigate('tickets')">
+        🧾 Tickets de compra${Shopping.getTickets().length ? ` (${Shopping.getTickets().length})` : ''}
+      </button>
+    `;
+
+    for (const [cat, lista] of porCat) {
+      const info = catInfo(cat);
+      html += `
+        <div class="shop-cat">
+          <div class="shop-cat__header">${info.icon} ${info.label} <span class="shop-cat__count">${lista.length}</span></div>
+          <ul class="shop-items">
+      `;
+      for (const it of lista) {
+        const origen = [
+          Shopping._donde(it),
+          Shopping._de(it),
+          it.manual ? 'añadido a mano' : '',
+        ].filter(Boolean).join(' · ');
+        html += `
+          <li class="shop-item ${it.comprado ? 'shop-item--done' : ''}">
+            <button class="shop-item__check" onclick="App.toggleBought('${Components.escapeHtml(it.key)}')"
+                    aria-label="Marcar comprado">${it.comprado ? '✅' : '○'}</button>
+            <div class="shop-item__body">
+              <div class="shop-item__name">${Components.escapeHtml(it.nombre)}</div>
+              <div class="shop-item__meta">
+                <span class="shop-item__qty">${Components.escapeHtml(it.cantidad)}</span>
+                ${it.precio !== null
+                  ? `<span class="shop-item__price">${Shopping._precio(it.precio)}</span>
+                     <span class="shop-item__shop">${Components.escapeHtml(it.tienda.nombre)}</span>`
+                  : ''}
+              </div>
+              <div class="shop-item__from">${Components.escapeHtml(origen)}</div>
+            </div>
+            <button class="shop-item__tag" onclick="App.openPriceModal('${Components.escapeHtml(it.key)}')"
+                    aria-label="Poner precio">🏷️</button>
+            ${it.manual ? `<button class="shop-item__tag shop-item__tag--del" onclick="App.removeShoppingItem('${it.manualId}')"
+                    aria-label="Quitar de la lista">✕</button>` : ''}
+          </li>`;
+      }
+      html += '</ul></div>';
+    }
+
+    html += this._renderFooter();
+    main.innerHTML = html;
+  },
+
+  toggleBought(key) {
+    Shopping.toggleComprado(key);
+    this.renderShoppingView();
+  },
+
+  // Modal: añadir un producto a mano (no sale de ninguna receta)
+  openAddProductModal() {
+    const tiendas = Shopping.getTiendas();
+    const cats = Shopping.CATEGORIAS.map(c =>
+      `<option value="${c.key}">${c.icon} ${Components.escapeHtml(c.label)}</option>`).join('');
+
+    Components.modal.open('➕ Añadir producto', `
+      <label style="font-size: 13px; color: var(--color-text-muted);">Producto</label>
+      <input type="text" id="ap-nombre" class="form-input" placeholder="Ej: Papel de cocina" style="margin-bottom: 12px;">
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Cantidad (opcional)</label>
+      <input type="text" id="ap-cantidad" class="form-input" placeholder="Ej: 2 ud, 1 kg" style="margin-bottom: 12px;">
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Categoría</label>
+      <select id="ap-categoria" class="form-input" style="margin-bottom: 12px;">
+        <option value="">Automática</option>
+        ${cats}
+        <option value="otros">📦 Otros</option>
+      </select>
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Precio (€) — opcional</label>
+      <input type="number" id="ap-precio" class="form-input" step="0.01" min="0" inputmode="decimal"
+             placeholder="0,00" style="margin-bottom: 12px;">
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Tienda — opcional</label>
+      <select id="ap-tienda" class="form-input" style="margin-bottom: 16px;">
+        ${tiendas.map(t => `<option value="${t.id}">${Components.escapeHtml(t.nombre)}</option>`).join('')}
+        <option value="">— sin tienda —</option>
+      </select>
+
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn--primary" style="flex: 1;" onclick="App.saveShoppingProduct()">Añadir</button>
+        <button class="btn btn--ghost" onclick="Components.modal.close()">Cancelar</button>
+      </div>
+    `);
+  },
+
+  saveShoppingProduct() {
+    const nombre = document.getElementById('ap-nombre')?.value.trim();
+    if (!nombre) { Components.toast.show('⚠️ Escribí el nombre del producto'); return; }
+    const cantidad = document.getElementById('ap-cantidad')?.value.trim() || '';
+    const categoria = document.getElementById('ap-categoria')?.value || '';
+    const precio = document.getElementById('ap-precio')?.value;
+    const tiendaId = document.getElementById('ap-tienda')?.value || null;
+
+    Shopping.addManual({ nombre, cantidad, categoria, precio, tiendaId });
+    Components.modal.close();
+    if (precio !== '' && !tiendaId) {
+      Components.toast.show('⚠️ El precio necesita una tienda: no se guardó');
+    } else {
+      Components.toast.show(`✅ ${nombre} añadido a la lista`);
+    }
+    this.renderShoppingView();
+  },
+
+  removeShoppingItem(id) {
+    if (!confirm('¿Quitar este producto de la lista?')) return;
+    Shopping.removeManual(id);
+    Components.toast.show('🗑️ Quitado de la lista');
+    this.renderShoppingView();
+  },
+
+  copyShoppingList() {
+    const items = Shopping.buildList();
+    this._copyText(Shopping.textoLista(items), '📋 Lista copiada');
+  },
+
+  // Copia un texto al portapapeles (con fallback para navegadores viejos)
+  _copyText(text, okMsg = '📋 Copiado') {
+    const done = () => Components.toast.show(okMsg);
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(done).catch(() => fallback());
+    } else {
+      fallback();
+    }
+    function fallback() {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      done();
+    }
+  },
+
+  // Modal: poner el precio de un producto en una tienda
+  openPriceModal(key) {
+    const items = Shopping.buildList();
+    const item = items.find(i => i.key === key);
+    if (!item) return;
+
+    const tiendas = Shopping.getTiendas();
+    const productos = Shopping.getProductosDe(item.nombre);
+    const prod = productos[0] || null;
+    const precios = prod ? Shopping.getPreciosDe(prod.id) : [];
+
+    const listaPrecios = precios.length ? `
+      <div class="shop-prices">
+        <h4>Precios que ya tenés</h4>
+        ${precios.map(p => `
+          <div class="shop-prices__row">
+            <span>${Components.escapeHtml(p.tienda.nombre)}</span>
+            <b>${Shopping._precio(p.precio)}</b>
+            <button class="btn btn--ghost btn--xs" onclick="App.removePrice('${prod.id}','${p.tiendaId}')">✕</button>
+          </div>`).join('')}
+      </div>` : '';
+
+    Components.modal.open(`🏷️ ${item.nombre}`, `
+      <p style="color: var(--color-text-muted); font-size: 13px; margin-bottom: 12px;">
+        Cantidad en la lista: <strong>${Components.escapeHtml(item.cantidad)}</strong><br>
+        Viene de: <strong>${Components.escapeHtml(Shopping._de(item))}</strong> (${Components.escapeHtml(Shopping._donde(item))})
+      </p>
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Tienda</label>
+      <select id="sp-tienda" class="form-input" style="margin-bottom: 12px;">
+        ${tiendas.map(t => `<option value="${t.id}">${Components.escapeHtml(t.nombre)}</option>`).join('')}
+      </select>
+      <button class="btn btn--outline btn--sm" style="margin-bottom: 12px;" onclick="App.addStoreFromPriceModal()">
+        ➕ Nueva tienda
+      </button>
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Producto (escribí lo mismo en cada tienda para comparar)</label>
+      <input type="text" id="sp-producto" class="form-input"
+             value="${Components.escapeHtml(prod?.nombre || item.nombre)}" style="margin-bottom: 12px;">
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Precio (€)</label>
+      <input type="number" id="sp-precio" class="form-input" step="0.01" min="0"
+             inputmode="decimal" placeholder="0,00" style="margin-bottom: 16px;">
+
+      ${listaPrecios}
+
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn--primary" style="flex: 1;" onclick="App.savePrice('${Components.escapeHtml(key)}')">Guardar</button>
+        <button class="btn btn--ghost" onclick="Components.modal.close()">Cancelar</button>
+      </div>
+    `);
+  },
+
+  savePrice(key) {
+    const items = Shopping.buildList();
+    const item = items.find(i => i.key === key);
+    const tiendaId = document.getElementById('sp-tienda')?.value;
+    const nombre = document.getElementById('sp-producto')?.value.trim();
+    const precio = document.getElementById('sp-precio')?.value;
+
+    if (!item || !tiendaId || !nombre || !precio) {
+      Components.toast.show('⚠️ Completá tienda, producto y precio');
+      return;
+    }
+
+    const producto = Shopping.ensureProducto({ ingrediente: item.nombre, nombre });
+    Shopping.setPrecio(producto.id, tiendaId, precio);
+    Components.modal.close();
+    Components.toast.show(`✅ ${Shopping._precio(precio)} en ${Shopping.getTienda(tiendaId).nombre}`);
+    this.renderShoppingView();
+  },
+
+  removePrice(productoId, tiendaId) {
+    Shopping.removePrecio(productoId, tiendaId);
+    Components.modal.close();
+    this.renderShoppingView();
+  },
+
+  // Modal: gestionar tiendas
+  showStoresModal() {
+    const tiendas = Shopping.getTiendas();
+    const rows = tiendas.map(t => {
+      const n = Shopping._data.precios.filter(p => p.tiendaId === t.id).length;
+      return `
+        <div class="shop-prices__row">
+          <span>${Components.escapeHtml(t.nombre)} <span style="opacity:.6">(${n} precios)</span></span>
+          <button class="btn btn--ghost btn--xs" onclick="App.removeStore('${t.id}')">✕</button>
+        </div>`;
+    }).join('');
+
+    Components.modal.open('🏪 Tiendas', `
+      <div class="shop-prices">
+        <h4>Tus tiendas</h4>
+        ${rows || '<p style="color:var(--color-text-muted)">No hay tiendas</p>'}
+      </div>
+      <hr style="border:none;border-top:1px solid var(--color-border);margin:16px 0;">
+      <label style="font-size: 13px; color: var(--color-text-muted);">Nombre de la tienda</label>
+      <input type="text" id="st-nombre" class="form-input" placeholder="Ej: Frutería de Ana" style="margin-bottom: 12px;">
+      <label style="font-size: 13px; color: var(--color-text-muted);">Tipo</label>
+      <select id="st-tipo" class="form-input" style="margin-bottom: 16px;">
+        <option value="supermercado">Supermercado</option>
+        <option value="mercado">Mercado</option>
+        <option value="fruteria">Frutería / verdulería</option>
+        <option value="carniceria">Carnicería</option>
+        <option value="pescaderia">Pescadería</option>
+        <option value="online">Online</option>
+      </select>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn--primary" style="flex:1;" onclick="App.addStore()">Agregar</button>
+        <button class="btn btn--ghost" onclick="Components.modal.close()">Cerrar</button>
+      </div>
+    `);
+  },
+
+  addStore() {
+    const nombre = document.getElementById('st-nombre')?.value.trim();
+    const tipo = document.getElementById('st-tipo')?.value || 'supermercado';
+    if (!nombre) { Components.toast.show('⚠️ Escribí el nombre'); return; }
+    Shopping.addTienda({ nombre, tipo });
+    Components.modal.close();
+    Components.toast.show(`✅ ${nombre} agregada`);
+    this.showStoresModal();
+  },
+
+  addStoreFromPriceModal() {
+    const nombre = prompt('Nombre de la tienda');
+    if (!nombre) return;
+    const t = Shopping.addTienda({ nombre });
+    Components.modal.close();
+    this.openPriceModalFor(t.id);
+  },
+
+  openPriceModalFor(tiendaId) {
+    const items = Shopping.buildList();
+    const item = items.find(i => i.precio === null) || items[0];
+    if (!item) return;
+    this.openPriceModal(item.key);
+    setTimeout(() => {
+      const sel = document.getElementById('sp-tienda');
+      if (sel) sel.value = tiendaId;
+    }, 50);
+  },
+
+  removeStore(id) {
+    const t = Shopping.getTienda(id);
+    if (!t) return;
+    if (!confirm(`¿Borrar "${t.nombre}" y sus precios?`)) return;
+    Shopping.removeTienda(id);
+    Components.modal.close();
+    this.renderShoppingView();
+  },
+
+  // Modal: reparto por tienda (dónde comprar)
+  showStoresByShop() {
+    const items = Shopping.buildList();
+    const grupos = Shopping.porTienda(items);
+    const total = Shopping.totalEstimado(items);
+
+    const html = grupos.map(g => {
+      const nombre = g.tienda ? g.tienda.nombre : 'Sin tienda (sin precio)';
+      const icon = g.tienda ? '🏪' : '❓';
+      return `
+        <div class="shop-group">
+          <div class="shop-group__header">${icon} ${Components.escapeHtml(nombre)}
+            <span class="shop-group__total">${Shopping._precio(g.total)}</span>
+          </div>
+          <ul class="shop-group__items">
+            ${g.items.map(it => `
+              <li>
+                <span>${Components.escapeHtml(it.nombre)}</span>
+                <span class="shop-group__price">${it.precio !== null ? Shopping._precio(it.precio) : '—'}</span>
+              </li>`).join('')}
+          </ul>
+          ${g.sinPrecio ? `<div class="shop-group__note">${g.sinPrecio} sin precio cargado</div>` : ''}
+        </div>`;
+    }).join('');
+
+    Components.modal.open('🗺️ Dónde comprar', `
+      <p style="color: var(--color-text-muted); font-size: 13px; margin-bottom: 12px;">
+        Total estimado: <strong>${Shopping._precio(total)}</strong>
+        ${Shopping.sinPrecio(items).length ? `(faltan ${Shopping.sinPrecio(items).length} precios)` : ''}
+      </p>
+      ${html || '<p>No hay nada en la lista.</p>'}
+    `);
+  },
+
+  // ============================================
+  // View: Tickets (registros de compra)
+  // ============================================
+  renderTicketsView() {
+    this.currentView = 'tickets';
+    this._updateNav(null);
+    this._updateHeader('🧾 Tickets de compra', true);
+
+    const main = document.getElementById('main-content');
+    const tickets = Shopping.getTickets();
+    const gastoMes = Shopping.gastoDelMes();
+
+    let html = `
+      <div class="card shop-summary">
+        <div class="shop-summary__row">
+          <span>🧾 <strong>${tickets.length}</strong> tickets</span>
+          <span>💶 <strong>${Shopping._precio(gastoMes)}</strong> este mes</span>
+        </div>
+        <div class="shop-summary__actions">
+          <button class="btn btn--primary btn--sm" onclick="App.openScanTicketModal()">📸 Escanear ticket</button>
+        </div>
+      </div>`;
+
+    if (!tickets.length) {
+      html += `
+        <div class="signin-view" style="padding: 24px 16px;">
+          <div class="signin-card">
+            <div class="signin-card__icon">🧾</div>
+            <h2 class="signin-card__title">Todavía no hay tickets</h2>
+            <p class="signin-card__hint">Hacé una foto del ticket y te armo el registro con
+              todo lo que compraste y los precios por tienda.</p>
+          </div>
+        </div>`;
+    } else {
+      html += '<ul class="shop-items">';
+      for (const t of tickets) {
+        const n = (t.lineas || []).length;
+        html += `
+          <li class="shop-item" onclick="App.showTicketDetail('${t.id}')" style="cursor: pointer;">
+            <div class="shop-item__body">
+              <div class="shop-item__name">${Components.escapeHtml(t.tiendaNombre || 'Sin tienda')}</div>
+              <div class="shop-item__meta">
+                <span class="shop-item__qty">${Components.escapeHtml(t.fecha || '')}</span>
+                <span>${n} ${n === 1 ? 'artículo' : 'artículos'}</span>
+              </div>
+            </div>
+            <div class="shop-item__price">${Shopping._precio(Shopping.ticketTotal(t))}</div>
+          </li>`;
+      }
+      html += '</ul>';
+    }
+
+    html += this._renderFooter();
+    main.innerHTML = html;
+  },
+
+  showTicketDetail(id) {
+    const t = Shopping.getTicket(id);
+    if (!t) return;
+    const lineas = (t.lineas || []).map(l => `
+      <li class="shop-item">
+        <div class="shop-item__body">
+          <div class="shop-item__name">${Components.escapeHtml(l.descripcion)}</div>
+          <div class="shop-item__meta">
+            ${l.cantidad !== null && l.cantidad !== undefined ? `<span class="shop-item__qty">${Components.escapeHtml(l.cantidad)}</span>` : ''}
+            ${l.precioTotal !== null && l.precioTotal !== undefined ? `<span class="shop-item__price">${Shopping._precio(l.precioTotal)}</span>` : ''}
+            ${l.ingrediente ? `<span>${Components.escapeHtml(l.ingrediente)}</span>` : ''}
+          </div>
+        </div>
+      </li>`).join('');
+
+    Components.modal.open('🧾 Ticket', `
+      <p style="color: var(--color-text-muted); font-size: 13px; margin-bottom: 12px;">
+        ${Components.escapeHtml(t.fecha || '')} · ${Components.escapeHtml(t.tiendaNombre || 'sin tienda')} ·
+        total <strong>${Shopping._precio(Shopping.ticketTotal(t))}</strong>
+      </p>
+      <ul class="shop-items">${lineas || '<li class="shop-item"><div class="shop-item__body">Sin líneas</div></li>'}</ul>
+      <div style="display: flex; gap: 8px; margin-top: 16px;">
+        <button class="btn btn--ghost" onclick="App.removeTicket('${t.id}')">🗑️ Borrar</button>
+        <button class="btn btn--ghost" style="flex:1;" onclick="Components.modal.close()">Cerrar</button>
+      </div>
+    `);
+  },
+
+  removeTicket(id) {
+    if (!confirm('¿Borrar este ticket?')) return;
+    Shopping.removeTicket(id);
+    Components.modal.close();
+    Components.toast.show('🗑️ Ticket borrado');
+    this.renderTicketsView();
+  },
+
+  // ============================================
+  // Tickets: escanear → revisar → guardar
+  // ============================================
+  openScanTicketModal() {
+    const tiendas = Shopping.getTiendas();
+    Components.modal.open('📸 Escanear ticket', `
+      <p style="color: var(--color-text-muted); font-size: 13px; margin-bottom: 12px;">
+        Hacé 1 o 2 fotos del ticket. La foto se lee con la IA y te traigo las líneas
+        para que las revises antes de guardar. <b>Las fotos no se guardan.</b>
+      </p>
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Tienda (opcional)</label>
+      <select id="tk-tienda" class="form-input" style="margin-bottom: 12px;">
+        <option value="">— la del ticket —</option>
+        ${tiendas.map(t => `<option value="${t.id}">${Components.escapeHtml(t.nombre)}</option>`).join('')}
+      </select>
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Foto 1</label>
+      <input type="file" accept="image/*" capture="environment" id="tk-foto1" class="form-input"
+             onchange="App.previewTicketPhoto(1)">
+      <div id="tk-prev1" style="margin: 6px 0 12px;"></div>
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Foto 2 (si el ticket es largo)</label>
+      <input type="file" accept="image/*" capture="environment" id="tk-foto2" class="form-input"
+             onchange="App.previewTicketPhoto(2)">
+      <div id="tk-prev2" style="margin: 6px 0 16px;"></div>
+
+      <button class="btn btn--primary btn--full" style="margin-bottom: 8px;" onclick="App.readTicketPhotos()">
+        🔍 Leer el ticket
+      </button>
+      <button class="btn btn--ghost btn--full" onclick="Components.modal.close(); App.openManualTicketModal();">
+        ✍️ Escribir las líneas a mano
+      </button>
+    `);
+  },
+
+  previewTicketPhoto(n) {
+    const file = document.getElementById(`tk-foto${n}`)?.files?.[0];
+    const box = document.getElementById(`tk-prev${n}`);
+    if (!file || !box) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      box.innerHTML = `<img src="${e.target.result}" style="max-width:100%;max-height:180px;border-radius:8px;">`;
+    };
+    reader.readAsDataURL(file);
+  },
+
+  // Redimensiona la foto antes de mandarla a la IA (una foto de móvil pesa
+  // 3-5 MB y la IA tarda muchísimo).
+  _resizeImage(file, max = 1400, quality = 0.72) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = reject;
+        img.onload = () => {
+          const escala = Math.min(1, max / Math.max(img.width, img.height));
+          const w = Math.round(img.width * escala);
+          const h = Math.round(img.height * escala);
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  },
+
+  // Catálogo + tiendas que se le pasan a la IA para que mapee las líneas.
+  _ticketContext() {
+    const ingredientes = new Map();
+    for (const r of Recipes.getAll()) {
+      for (const ing of (r.ingredientes || [])) {
+        const key = Shopping._norm(Shopping._canon(ing.nombre));
+        if (key && !ingredientes.has(key)) ingredientes.set(key, Shopping._labelDe(ing.nombre));
+      }
+    }
+    return {
+      tiendas: Shopping.getTiendas().map(t => t.nombre),
+      ingredientes: [...ingredientes.values()].sort((a, b) => a.localeCompare(b, 'es')),
+      productos: Shopping.getProductos().map(p => `${p.nombre} [${Shopping._labelDe(p.ingrediente)}]`),
+    };
+  },
+
+  async readTicketPhotos() {
+    if (!AI.hasKey()) {
+      Components.toast.show('⚠️ Configurá tu API key en Ajustes → 🤖 (hace falta un modelo que lea imágenes)', 5000);
+      return;
+    }
+    const files = [
+      document.getElementById('tk-foto1')?.files?.[0],
+      document.getElementById('tk-foto2')?.files?.[0],
+    ].filter(Boolean);
+    if (!files.length) { Components.toast.show('⚠️ Elegí al menos una foto'); return; }
+
+    Components.toast.show('📖 Leyendo el ticket…', 12000);
+    try {
+      const imgs = [];
+      for (const f of files) imgs.push(await this._resizeImage(f));
+      const data = await AI.readTicket(imgs, this._ticketContext());
+      if (!data || data.error) {
+        Components.toast.show('❌ ' + ((data && data.error) || 'No pude leer el ticket'), 5000);
+        return;
+      }
+      Components.modal.close();
+      this.openTicketReview(this._normalizeTicket(data));
+    } catch (err) {
+      console.error('[ticket] error', err);
+      const msg = String(err?.message || err);
+      Components.toast.show(
+        /imagen|image|vision|content type|unsupported/i.test(msg)
+          ? '❌ Tu modelo no lee imágenes. Cambiá el modelo en Ajustes → 🤖'
+          : '❌ ' + msg.slice(0, 110),
+        6000
+      );
+    }
+  },
+
+  _normalizeTicket(data) {
+    const lineas = (data.lineas || []).map(l => ({
+      descripcion: String(l.descripcion || '').trim(),
+      cantidad: l.cantidad ?? '',
+      precioUnit: l.precio_unit ?? l.precioUnit ?? '',
+      precioTotal: l.precio_total ?? l.precioTotal ?? '',
+      ingrediente: l.ingrediente || '',
+    })).filter(l => l.descripcion);
+    const total = data.total ?? lineas.reduce((a, l) => a + (parseFloat(l.precioTotal) || 0), 0);
+    return {
+      fecha: /^\d{4}-\d{2}-\d{2}$/.test(data.fecha || '') ? data.fecha : new Date().toISOString().slice(0, 10),
+      tienda: String(data.tienda || '').trim(),
+      total,
+      lineas,
+    };
+  },
+
+  openTicketReview(data) {
+    const tiendas = Shopping.getTiendas();
+    const tiendaId = tiendas.find(t => Shopping._norm(t.nombre) === Shopping._norm(data.tienda))?.id || '';
+    const ctx = this._ticketContext();
+
+    const filas = data.lineas.map((l, i) => `
+      <tr data-i="${i}">
+        <td><input class="form-input" id="tk-l-desc-${i}" value="${Components.escapeHtml(l.descripcion)}"></td>
+        <td><input class="form-input" id="tk-l-cant-${i}" value="${Components.escapeHtml(l.cantidad)}"
+                   inputmode="decimal" style="width:48px;text-align:center"></td>
+        <td><input class="form-input" id="tk-l-pt-${i}" value="${Components.escapeHtml(l.precioTotal)}"
+                   inputmode="decimal" style="width:64px;text-align:right"></td>
+        <td><input class="form-input" list="tk-ingredientes" id="tk-l-ing-${i}"
+                   value="${Components.escapeHtml(l.ingrediente)}" placeholder="producto"></td>
+        <td style="text-align:center"><input type="checkbox" id="tk-l-guardar-${i}"
+                   ${l.ingrediente ? 'checked' : ''} aria-label="Guardar el precio"></td>
+      </tr>`).join('');
+
+    Components.modal.open('🧾 Revisá el ticket', `
+      <p style="color: var(--color-text-muted); font-size: 13px; margin-bottom: 12px;">
+        Revisá las líneas. Donde dejes el producto, su precio se guarda en el libro
+        para esa tienda (y la lista de la compra lo toma).
+      </p>
+
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <div style="flex:1;">
+          <label style="font-size: 13px; color: var(--color-text-muted);">Fecha</label>
+          <input type="date" id="tk-fecha" class="form-input" value="${data.fecha}">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size: 13px; color: var(--color-text-muted);">Tienda</label>
+          <select id="tk-tienda-sel" class="form-input">
+            <option value="">— otra —</option>
+            ${tiendas.map(t => `<option value="${t.id}" ${t.id === tiendaId ? 'selected' : ''}>${Components.escapeHtml(t.nombre)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <input type="text" id="tk-tienda-nombre" class="form-input" style="margin-bottom:12px;"
+             placeholder="Tienda del ticket" value="${Components.escapeHtml(tiendaId ? '' : data.tienda)}">
+
+      <table class="tk-table">
+        <thead>
+          <tr><th>Artículo</th><th>Cant</th><th>€</th><th>Producto</th><th>💰</th></tr>
+        </thead>
+        <tbody id="tk-lineas">${filas}</tbody>
+      </table>
+
+      <datalist id="tk-ingredientes">
+        ${ctx.ingredientes.map(i => `<option value="${Components.escapeHtml(i)}"></option>`).join('')}
+      </datalist>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        <label style="font-size:13px;color:var(--color-text-muted);">Total</label>
+        <input type="number" id="tk-total" class="form-input" step="0.01" inputmode="decimal"
+               value="${data.total}" style="width:96px;">
+        <label style="font-size:13px;color:var(--color-text-muted);display:flex;align-items:center;gap:6px;">
+          <input type="checkbox" id="tk-marcar" checked> Marcar comprado en la lista
+        </label>
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-top: 16px;">
+        <button class="btn btn--primary" style="flex:1;" onclick="App.saveTicket()">Guardar ticket</button>
+        <button class="btn btn--ghost" onclick="Components.modal.close()">Cancelar</button>
+      </div>
+    `);
+  },
+
+  // "PATATAS 1KG" → "Patatas 1kg" (nombre del producto en el libro)
+  _tituloTicket(desc) {
+    return Shopping._tituloNombre(desc);
+  },
+
+  saveTicket() {
+    const fecha = document.getElementById('tk-fecha')?.value;
+    const tiendaId = document.getElementById('tk-tienda-sel')?.value || null;
+    const tiendaNombre = (document.getElementById('tk-tienda-nombre')?.value || '').trim();
+    const total = document.getElementById('tk-total')?.value;
+    const marcar = document.getElementById('tk-marcar')?.checked !== false;
+
+    const lineas = [...document.querySelectorAll('#tk-lineas tr')].map(tr => {
+      const i = tr.getAttribute('data-i');
+      return {
+        descripcion: (document.getElementById(`tk-l-desc-${i}`)?.value || '').trim(),
+        cantidad: document.getElementById(`tk-l-cant-${i}`)?.value || '',
+        precioTotal: document.getElementById(`tk-l-pt-${i}`)?.value || '',
+        ingrediente: (document.getElementById(`tk-l-ing-${i}`)?.value || '').trim(),
+        precioGuardado: document.getElementById(`tk-l-guardar-${i}`)?.checked === true,
+      };
+    }).filter(l => l.descripcion);
+
+    if (!lineas.length) { Components.toast.show('⚠️ El ticket no tiene líneas'); return; }
+
+    // la tienda: la elegida o la que dice el ticket (se crea si no existe)
+    let tid = tiendaId;
+    let tname = tiendaNombre;
+    if (!tid) {
+      if (!tname) { Components.toast.show('⚠️ Elegí la tienda'); return; }
+      const existente = Shopping.getTiendas().find(t => Shopping._norm(t.nombre) === Shopping._norm(tname));
+      tid = existente ? existente.id : Shopping.addTienda({ nombre: tname }).id;
+      tname = Shopping.getTienda(tid)?.nombre || tname;
+    }
+
+    // el precio del ticket va al libro de precios (lo resuelve Shopping.addTicket:
+    // si el producto no existe, lo crea con el nombre de la línea)
+    Shopping.addTicket({ fecha, tiendaId: tid, tiendaNombre: tname, lineas, total, marcarComprado: marcar });
+    Components.modal.close();
+    Components.toast.show(`🧾 Ticket guardado · ${Shopping._precio(parseFloat(total) || 0)}`);
+    this.renderTicketsView();
+  },
+
+  // ============================================
+  // Ticket a mano (sin foto)
+  // ============================================
+  openManualTicketModal() {
+    Components.modal.open('✍️ Ticket a mano', `
+      <label style="font-size: 13px; color: var(--color-text-muted);">Tienda</label>
+      <input type="text" id="tm-tienda" class="form-input" placeholder="Ej: Mercadona" style="margin-bottom:12px;">
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Fecha</label>
+      <input type="date" id="tm-fecha" class="form-input"
+             value="${new Date().toISOString().slice(0, 10)}" style="margin-bottom:12px;">
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">
+        Líneas — una por renglón: <b>artículo | cantidad | precio</b>
+      </label>
+      <textarea id="tm-lineas" class="form-input" rows="8"
+        placeholder="Patatas 1kg | 1 | 1,29&#10;Leche | 2 | 1,10&#10;Aceite de oliva | 1 | 6,50"></textarea>
+
+      <label style="font-size: 13px; color: var(--color-text-muted); margin-top:12px;">Total (opcional)</label>
+      <input type="number" id="tm-total" class="form-input" step="0.01" inputmode="decimal"
+             style="margin-bottom:12px;">
+
+      <label style="font-size:13px;color:var(--color-text-muted);display:flex;align-items:center;gap:6px;margin-bottom:16px;">
+        <input type="checkbox" id="tm-marcar" checked> Marcar comprado en la lista
+      </label>
+
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn--primary" style="flex:1;" onclick="App.saveManualTicket()">Guardar ticket</button>
+        <button class="btn btn--ghost" onclick="Components.modal.close()">Cancelar</button>
+      </div>
+    `);
+  },
+
+  saveManualTicket() {
+    const tiendaNombre = (document.getElementById('tm-tienda')?.value || '').trim();
+    const fecha = document.getElementById('tm-fecha')?.value;
+    const total = document.getElementById('tm-total')?.value;
+    const marcar = document.getElementById('tm-marcar')?.checked !== false;
+    const crudo = document.getElementById('tm-lineas')?.value || '';
+
+    const lineas = crudo.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+      const partes = l.split('|').map(p => p.trim());
+      return {
+        descripcion: partes[0] || '',
+        cantidad: partes[1] || '',
+        precioTotal: partes[2] || '',
+        ingrediente: '',
+        precioGuardado: false,
+      };
+    }).filter(l => l.descripcion);
+
+    if (!lineas.length) { Components.toast.show('⚠️ Escribí al menos una línea'); return; }
+    if (!tiendaNombre) { Components.toast.show('⚠️ Escribí la tienda'); return; }
+
+    const existente = Shopping.getTiendas().find(t => Shopping._norm(t.nombre) === Shopping._norm(tiendaNombre));
+    const tienda = existente || Shopping.addTienda({ nombre: tiendaNombre });
+
+    Shopping.addTicket({
+      fecha,
+      tiendaId: tienda.id,
+      tiendaNombre: tienda.nombre,
+      lineas,
+      total: total !== '' && total !== undefined ? total : null,
+      marcarComprado: marcar,
+    });
+
+    Components.modal.close();
+    Components.toast.show('🧾 Ticket guardado');
+    this.renderTicketsView();
+  },
+
+  // ============================================
+  // View: Plan de preparación
+  // ============================================
+  renderPrepView() {
+    this.currentView = 'prep';
+    this._updateNav(null);
+    this._updateHeader('🍳 Plan de preparación', true);
+    this._updateHeaderTitle('🍳 Plan de preparación');
+
+    const main = document.getElementById('main-content');
+    const wk = Menu.getWeekKey();
+    const plan = Prep.buildPlan(wk);
+
+    if (!plan.sesiones.length) {
+      main.innerHTML = `
+        <div class="signin-view" style="padding: 24px 16px;">
+          <div class="signin-card">
+            <div class="signin-card__icon">🍳</div>
+            <h2 class="signin-card__title">No hay nada que preparar</h2>
+            <p class="signin-card__hint">Asigná recetas al menú y te digo qué día cocinar cada cosa.</p>
+            <button class="btn btn--primary btn--full" onclick="App.navigate('menu')">
+              ← Ir al menú
+            </button>
+          </div>
+          ${this._renderFooter()}
+        </div>`;
+      return;
+    }
+
+    const h = (min) => (min >= 60
+      ? `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min`
+      : `${min} min`);
+
+    let html = `
+      <div class="week-nav">
+        <button class="week-nav__btn" onclick="App.prevWeek()" aria-label="Semana anterior">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6"/>
+          </svg>
+        </button>
+        <span class="week-nav__label">${Menu.getWeekLabel()}</span>
+        <button class="week-nav__btn" onclick="App.nextWeek()" aria-label="Semana siguiente">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="card prep-summary">
+        <div class="prep-summary__row">
+          <span>🍳 <strong>${plan.sesiones.length}</strong> ${plan.sesiones.length === 1 ? 'sesión' : 'sesiones'}</span>
+          <span>🥘 <strong>${plan.nPlatos}</strong> platos</span>
+          <span>⏱️ <strong>~${h(plan.minutosTotal)}</strong></span>
+        </div>
+        ${plan.diasLibres.length ? `
+        <div class="prep-summary__row prep-summary__row--muted">
+          😌 Descansás: ${plan.diasLibres.map(d => Prep.DIAS[d]).join(', ')}
+        </div>` : ''}
+        ${plan.diaCompra !== null ? `
+        <div class="prep-summary__row prep-summary__row--muted">
+          🛒 Comprá el ${Prep._nombreDia(plan.diaCompra)}, antes de la primera sesión
+        </div>` : ''}
+        <div class="prep-summary__actions">
+          <button class="btn btn--outline btn--sm" onclick="App.copyPrepPlan()">📋 Copiar</button>
+          <button class="btn btn--outline btn--sm" onclick="App.navigate('shopping')">🛒 Lista de la compra</button>
+        </div>
+      </div>
+    `;
+
+    for (const s of plan.sesiones) {
+      const listos = s.platos.filter(p => Prep.estaHecho(p.id, wk)).length;
+      const completa = listos === s.platos.length;
+      html += `
+        <div class="prep-day ${completa ? 'prep-day--done' : ''}">
+          <div class="prep-day__head">
+            <span class="prep-day__title">${Prep.DIAS_LARGO[s.dia]} ${s.fecha}</span>
+            <span class="prep-day__count">${s.platos.length} ${s.platos.length === 1 ? 'plato' : 'platos'} · ~${h(s.minutos)}</span>
+            <span class="prep-day__count">${listos}/${s.platos.length} listos</span>
+          </div>
+          <ul class="prep-items">
+            ${s.platos.map(p => `
+              <li class="prep-item ${Prep.estaHecho(p.id, wk) ? 'prep-item--done' : ''}">
+                <button class="prep-item__check" onclick="App.togglePrepPlato('${Components.escapeHtml(p.id)}')"
+                        aria-label="Marcar hecho">${Prep.estaHecho(p.id, wk) ? '✅' : '○'}</button>
+                <div class="prep-item__body">
+                  <div class="prep-item__name">${Components.escapeHtml(p.nombre)}</div>
+                  <div class="prep-item__when">→ ${Components.escapeHtml(Prep._consumoTexto(p))}</div>
+                  <div class="prep-item__why">${Components.escapeHtml(p.motivo)}</div>
+                  ${p.ultimoDia - p.primerDia > p.conserva ? `
+                  <div class="prep-item__warn">
+                    ⚠️ Para el ${Prep.DIAS[p.ultimoDia]} no da (aguanta ${p.conserva} días): hay que hacerlo de nuevo
+                  </div>` : ''}
+                </div>
+              </li>`).join('')}
+            ${s.compartidas.length ? `
+            <li class="prep-batch">
+              🔁 ${s.compartidas.map(k => Prep.labelClave(k)).join(' / ')} en los ${s.platos.length} platos: una sola compra y lo aprovechás
+            </li>` : ''}
+          </ul>
+        </div>`;
+    }
+
+    html += this._renderFooter();
+    main.innerHTML = html;
+  },
+
+  togglePrepPlato(id) {
+    Prep.toggleHecho(id);
+    this.renderPrepView();
+  },
+
+  copyPrepPlan() {
+    this._copyText(Prep.textoPlan(Prep.buildPlan()), '📋 Plan copiado');
+  },
+
+  // ============================================
+  // View: Recipes List
+  // ============================================
+  renderRecipesView() {
+    this.currentView = 'recipes';
+    this._updateNav('recipes');
+    this._updateHeader('📚 ' + T.nav.recipes, false);
+    
+    const main = document.getElementById('main-content');
+    const recipes = Recipes.getAll();
+
+    let html = `
+      <div class="search-bar">
+        <input type="text" id="recipe-search" class="form-input" 
+               placeholder="${T.actions.search}" oninput="App.filterRecipes()">
+      </div>
+      <div id="recipe-list-container">
+    `;
+
+    if (recipes.length === 0) {
+      html += Components.emptyState('📚', T.recipe.sinRecetas, T.recipe.sinRecetasHint);
+    } else {
+      html += recipes.map(r => Components.recipeCard(r)).join('');
+    }
+
+    html += '</div>';
+    html += `
+      <button class="btn btn--primary btn--full" style="margin-top: 16px;"
+              onclick="App.navigate('recipe', { id: 'new' })">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+        ${T.recipe.newRecipe}
+      </button>
+    `;
+
+    html += this._renderFooter();
+
+    main.innerHTML = html;
+
+    // Click handlers for recipe cards
+    main.querySelectorAll('.recipe-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const id = card.dataset.recipeId;
+        this.navigate('recipe', { id });
+      });
+    });
+  },
+
+  // ============================================
+  // View: Template (edición de plantilla)
+  // ============================================
+  renderTemplateView() {
+    this.currentView = 'template';
+    this._updateNav(null);
+    this._updateHeader('📋 Plantilla', true);
+
+    const cur = Templates.getCurrent();
+    if (!cur) {
+      // No hay plantilla todavía: ofrecer crearla desde la semana actual
+      const main = document.getElementById('main-content');
+      main.innerHTML = `
+        <div class="signin-view" style="padding: 24px 16px;">
+          <div class="signin-card">
+            <div class="signin-card__icon">📋</div>
+            <h2 class="signin-card__title">Sin plantilla todavía</h2>
+            <p class="signin-card__hint">Creá una a partir de la semana actual o empezá desde cero.</p>
+            <button class="btn btn--primary btn--full" onclick="App.saveCurrentAsTemplate()">
+              📋 Crear desde esta semana
+            </button>
+            <button class="btn btn--secondary btn--full" style="margin-top: 8px;"
+                    onclick="App.createTemplateFromExample()">
+              🧪 Usar plantilla de ejemplo
+            </button>
+            <button class="btn btn--ghost btn--full" style="margin-top: 8px;"
+                    onclick="App.navigate('menu')">
+              ← Volver al menú
+            </button>
+          </div>
+          ${this._renderFooter()}
+        </div>
+      `;
+      return;
+    }
+
+    const main = document.getElementById('main-content');
+    const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+    let html = `
+      <div class="template-meta card" style="margin-bottom: 12px;">
+        <label style="font-size: 13px; color: var(--color-text-muted);">Nombre</label>
+        <input type="text" id="tpl-edit-nombre" class="form-input"
+               value="${Components.escapeHtml(cur.nombre)}"
+               oninput="App._updateTemplateMeta()"
+               style="margin-bottom: 8px;">
+        <label style="font-size: 13px; color: var(--color-text-muted);">Descripción</label>
+        <input type="text" id="tpl-edit-desc" class="form-input"
+               value="${Components.escapeHtml(cur.descripcion || '')}"
+               oninput="App._updateTemplateMeta()"
+               placeholder="Opcional">
+      </div>
+
+      <div class="drag-hint">
+        <span class="drag-hint__icon">⠿</span>
+        Mantené apretado y arrastrá una receta a otra celda para moverla
+      </div>
+
+      <div class="menu-grid">
+    `;
+
+    Store.getDaysOrder().forEach((day, index) => {
+      const dayMeals = cur.dias[day] || { lunch: null, dinner: null };
+      html += `
+        <div class="menu-day">
+          <div class="menu-day__header">${dayNames[index]}</div>
+          <div class="menu-day__meals">
+      `;
+      Store.getMealTypes().forEach(mealType => {
+        const recipeId = dayMeals[mealType];
+        const recipe = recipeId ? Recipes.getById(recipeId) : null;
+        html += Components.mealCell(mealType, recipe, { source: 'template', day });
+      });
+      html += `</div></div>`;
+    });
+
+    html += '</div>';
+
+    html += `
+      <div class="template-actions">
+        <button class="btn btn--primary btn--full" onclick="App.applyTemplateToCurrent()">
+          🔁 Aplicar a esta semana
+        </button>
+        <button class="btn btn--secondary btn--full" style="margin-top: 8px;"
+                onclick="App.applyTemplateToOtherWeek()">
+          📅 Aplicar a otra semana
+        </button>
+        <button class="btn btn--danger btn--full" style="margin-top: 8px;"
+                onclick="App.deleteCurrentTemplate()">
+          🗑️ Eliminar plantilla
+        </button>
+      </div>
+    `;
+
+    html += this._renderFooter();
+
+    main.innerHTML = html;
+    this._attachTemplateCellListeners();
+  },
+
+  // Actualiza nombre/descripción de la plantilla al tipear
+  _updateTemplateMeta() {
+    const nombre = document.getElementById('tpl-edit-nombre')?.value ?? '';
+    const descripcion = document.getElementById('tpl-edit-desc')?.value ?? '';
+    Templates.updateMeta(nombre, descripcion);
+  },
+
+  // Asigna receta a una celda de la plantilla (click handler)
+  _attachTemplateCellListeners() {
+    const dayLabels = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
+    document.querySelectorAll('.meal-cell').forEach(cell => {
+      cell.addEventListener('click', () => {
+        // click que viene después de un arrastre → ignorar
+        if (typeof DragDrop !== 'undefined' && DragDrop.shouldIgnoreClick()) return;
+
+        const meal = cell.dataset.meal;
+        const headerText = cell.closest('.menu-day')
+                              .querySelector('.menu-day__header').textContent.toLowerCase();
+        const day = cell.dataset.day
+          || Store.getDaysOrder()[dayLabels.indexOf(headerText)];
+        if (!day || !meal) return;
+
+        if (cell.classList.contains('meal-cell--vacant')) {
+          // Pedir receta
+          this.openRecipeSelector(day, meal, /* forTemplate */ true);
+        } else {
+          // Mostrar opciones (quitar / cambiar)
+          const recipeId = cell.dataset.recipeId;
+          this.openTemplateMealOptions(day, meal, recipeId);
+        }
+      });
+    });
+
+    // Arrastrar recetas dentro de la plantilla
+    if (typeof DragDrop !== 'undefined') {
+      DragDrop.attach(document.getElementById('main-content'), {
+        onDrop: (d) => this._moveMealInTemplate(d),
+      });
+    }
+  },
+
+  // Mueve (o intercambia) dos recetas de la plantilla
+  _moveMealInTemplate({ from, to }) {
+    const cur = Templates.getCurrent();
+    if (!cur || !from || !to) return;
+    if (from.day === to.day && from.meal === to.meal) return;
+
+    if (!cur.dias[from.day]) cur.dias[from.day] = { lunch: null, dinner: null };
+    if (!cur.dias[to.day]) cur.dias[to.day] = { lunch: null, dinner: null };
+
+    const a = cur.dias[from.day][from.meal] ?? null;
+    const b = cur.dias[to.day][to.meal] ?? null;
+
+    cur.dias[from.day][from.meal] = b;
+    cur.dias[to.day][to.meal] = a;
+    cur.updatedAt = new Date().toISOString();
+    Templates._save();
+
+    Components.toast.show('🔀 Receta movida en la plantilla');
+    this.renderTemplateView();
+  },
+
+  // Abre el selector de receta pero guardando en la plantilla, no en la semana
+  openRecipeSelectorForTemplate(day, mealType) {
+    this.pendingMeal = { day, mealType };
+    const recipes = Recipes.getAll();
+    Components.modal.open(
+      T.menu.selectRecipe,
+      Components.recipeSelector(recipes, null, mealType)
+    );
+    this._setupFilterTabs(mealType);
+    // Override: cuando eligen una receta, asignar a plantilla en vez de semana
+    this._templateAssignmentMode = true;
+  },
+
+  // Opciones al tocar una celda ocupada de la plantilla
+  openTemplateMealOptions(day, mealType, recipeId) {
+    const recipe = Recipes.getById(recipeId);
+    Components.modal.open('Comida de la plantilla', `
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <p style="margin: 0 0 8px 0;"><strong>${Components.escapeHtml(recipe?.nombre || '')}</strong></p>
+        <button class="btn btn--secondary btn--full" onclick="Components.modal.close(); App.openRecipeSelectorForTemplate('${day}', '${mealType}');">
+          🔁 Cambiar receta
+        </button>
+        <button class="btn btn--danger btn--full" onclick="App._removeFromTemplate('${day}', '${mealType}');">
+          🗑️ Quitar de la plantilla
+        </button>
+        <button class="btn btn--ghost btn--full" onclick="Components.modal.close()">
+          Cancelar
+        </button>
+      </div>
+    `);
+  },
+
+  _removeFromTemplate(day, mealType) {
+    Templates.remove(day, mealType);
+    Components.modal.close();
+    Components.toast.show('🗑️ Receta quitada');
+    this.renderTemplateView();
+  },
+
+  // Modal: aplicar plantilla a OTRA semana (no la actual)
+  applyTemplateToOtherWeek() {
+    if (!Templates.hasAny()) {
+      Components.toast.show('No hay plantilla guardada');
+      return;
+    }
+    const weeks = Templates.getNearbyWeeks(4);
+    Components.modal.open('📅 Aplicar a otra semana', `
+      <p style="color: var(--color-text-muted); margin-bottom: 12px;">
+        Sobrescribe la semana que elijas con la plantilla actual.
+      </p>
+      <select id="tpl-target" class="form-input" style="margin-bottom: 16px;">
+        ${weeks.map(w => `<option value="${w.key}">${w.label}</option>`).join('')}
+      </select>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn--primary" onclick="App._confirmApplyTemplateToOther()">Aplicar</button>
+        <button class="btn btn--ghost" onclick="Components.modal.close()">Cancelar</button>
+      </div>
+    `);
+  },
+
+  _confirmApplyTemplateToOther() {
+    const target = document.getElementById('tpl-target')?.value;
+    if (!target) return;
+    if (Menu._menu[target] && !confirm('Esa semana ya tiene menú. ¿Sobrescribir?')) return;
+    Menu._menu[target] = Templates._cloneWeek(Templates.getCurrent().dias);
+    Menu._save();
+    Components.modal.close();
+    Components.toast.show(`✅ Plantilla aplicada a ${target}`);
+  },
+
+  deleteCurrentTemplate() {
+    if (!confirm('¿Eliminar la plantilla? Esta acción no se puede deshacer.')) return;
+    Templates.deleteCurrent();
+    Components.toast.show('🗑️ Plantilla eliminada');
+    this.navigate('menu');
+  },
+
+  // ============================================
+  // View: Recipe Detail
+  // ============================================
+  renderRecipeDetail(id) {
+    const recipe = Recipes.getById(id);
+    if (!recipe) {
+      Components.toast.show(T.toast.error);
+      this.navigate('recipes');
+      return;
+    }
+
+    this.currentRecipeId = id;
+    this._updateNav(null);
+    this._updateHeader(T.actions.back, true);
+    this._updateHeaderTitle('📋 ' + recipe.nombre);
+
+    const main = document.getElementById('main-content');
+    
+    const ingredients = recipe.ingredientes.map(ing => `
+      <li>
+        <span>${Components.escapeHtml(ing.nombre)}</span>
+        <span>${ing.cantidad} ${T.units[ing.unidad] || ''}</span>
+      </li>
+    `).join('');
+
+    const steps = recipe.pasos.map((step, i) => `
+      <li>
+        <span class="step-number">${i + 1}</span>
+        <span>${Components.escapeHtml(step)}</span>
+      </li>
+    `).join('');
+
+    const tags = recipe.tags.map(t => 
+      `<span class="tag">${T.tags[t] || t}</span>`
+    ).join('');
+
+    const icon = Components.getRecipeIcon(recipe.tags);
+
+    const heroImage = recipe.imagen
+      ? `<img class="recipe-detail__hero" src="${Components.escapeHtml(recipe.imagen)}" alt="${Components.escapeHtml(recipe.nombre)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+         <div class="recipe-detail__icon" style="display:none">${icon}</div>`
+      : `<div class="recipe-detail__icon">${icon}</div>`;
+
+    main.innerHTML = `
+      <div class="recipe-detail__header">
+        ${heroImage}
+        <h2 class="recipe-detail__name">${Components.escapeHtml(recipe.nombre)}</h2>
+        ${tags ? `<div class="recipe-card__tags" style="justify-content: center;">${tags}</div>` : ''}
+      </div>
+
+      ${Components.nutritionPanel(recipe.nutricion)}
+
+      <div class="card recipe-detail__section">
+        <h3 class="recipe-detail__section-title">${T.recipe.ingredients}</h3>
+        <ul class="recipe-detail__list">
+          ${ingredients || '<li>Añade ingredientes</li>'}
+        </ul>
+      </div>
+
+      <div class="card recipe-detail__section">
+        <h3 class="recipe-detail__section-title">${T.recipe.steps}</h3>
+        <ol class="recipe-detail__list recipe-detail__steps">
+          ${steps || '<li>Añade pasos</li>'}
+        </ol>
+      </div>
+
+      ${recipe.link ? `
+      <div class="card recipe-detail__section recipe-detail__link">
+        <a href="${Components.escapeHtml(recipe.link)}" target="_blank" rel="noopener noreferrer" class="recipe-link-btn">
+          🔗 Ver receta original
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/>
+          </svg>
+        </a>
+      </div>` : ''}
+
+      <div class="form-actions">
+        <button class="btn btn--outline" onclick="App.deleteRecipe('${id}')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+          </svg>
+          ${T.actions.delete}
+        </button>
+        <button class="btn btn--ai" onclick="App.aiCompleteRecipe('${recipe.id}')" title="Rellenar ingredientes y pasos con IA">
+          🤖 Rellenar con IA
+        </button>
+        <button class="btn btn--primary" onclick="App.editRecipe('${id}')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+          ${T.actions.edit}
+        </button>
+      </div>
+      ${this._renderFooter()}
+    `;
+  },
+
+  // ============================================
+  // View: Recipe Form
+  // ============================================
+  renderRecipeForm(id = null) {
+    const isEdit = !!id;
+    const recipe = isEdit ? Recipes.getById(id) : null;
+
+    this._updateNav(null);
+    this._updateHeader(T.actions.back, true);
+    this._updateHeaderTitle(isEdit ? T.recipe.editRecipe : T.recipe.newRecipe);
+
+    const main = document.getElementById('main-content');
+    main.innerHTML = Components.recipeForm(recipe, isEdit) + this._renderFooter();
+    // El submit se maneja inline con onsubmit en el form (más confiable)
+  },
+
+  // ============================================
+  // Week Navigation
+  // ============================================
+  prevWeek() {
+    Menu.prevWeek();
+    this._renderCurrentView();
+  },
+
+  nextWeek() {
+    Menu.nextWeek();
+    this._renderCurrentView();
+  },
+
+  // Re-renderiza la vista en la que estás (la semana cambiaba y te sacaba
+  // de la lista de la compra al menú)
+  _renderCurrentView() {
+    if (this.currentView === 'shopping') this.renderShoppingView();
+    else this.renderMenuView();
+  },
+
+  // ============================================
+  // Meal Cell Interactions
+  // ============================================
+  _attachMealCellListeners() {
+    document.querySelectorAll('.meal-cell').forEach(cell => {
+      cell.addEventListener('click', () => {
+        // click que viene después de un arrastre → ignorar
+        if (typeof DragDrop !== 'undefined' && DragDrop.shouldIgnoreClick()) return;
+
+        const mealType = cell.dataset.meal;
+        const day = cell.closest('.menu-day').querySelector('.menu-day__header').textContent.toLowerCase();
+        const dayKey = cell.dataset.day
+          || Store.getDaysOrder()[['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'].indexOf(day)];
+        
+        if (cell.classList.contains('meal-cell--vacant')) {
+          // Open recipe selector
+          this.openRecipeSelector(dayKey, mealType);
+        } else {
+          // Show options menu
+          const recipeId = cell.dataset.recipeId;
+          this.openMealOptions(dayKey, mealType, recipeId);
+        }
+      });
+    });
+
+    // Arrastrar recetas entre celdas
+    if (typeof DragDrop !== 'undefined') {
+      DragDrop.attach(document.getElementById('main-content'), {
+        onDrop: (d) => this._moveMealInWeek(d),
+      });
+    }
+  },
+
+  // Mueve (o intercambia) dos recetas del menú semanal
+  _moveMealInWeek({ from, to }) {
+    if (!from || !to) return;
+    if (from.day === to.day && from.meal === to.meal) return;
+
+    const week = Menu.getCurrentWeek();
+    if (!week[from.day] || !week[to.day]) return;
+
+    const a = week[from.day][from.meal] ?? null;
+    const b = week[to.day][to.meal] ?? null;
+
+    week[from.day][from.meal] = b;
+    week[to.day][to.meal] = a;
+
+    Menu._menu[Menu.getWeekKey()] = week;
+    Menu._save();
+
+    const nameOf = (id) => (id ? (Recipes.getById(id)?.nombre || '') : '');
+    Components.toast.show(
+      b
+        ? `🔀 ${nameOf(a)} ↔ ${nameOf(b)}`
+        : `↔️ ${nameOf(a)} movida`
+    );
+    this.renderMenuView();
+  },
+
+  openRecipeSelector(day, mealType) {
+    this.pendingMeal = { day, mealType };
+    const recipes = Recipes.getAll();
+    
+    Components.modal.open(
+      T.menu.selectRecipe,
+      Components.recipeSelector(recipes, null, mealType)
+    );
+    
+    // Setup filter tabs listener
+    this._setupFilterTabs(mealType);
+  },
+
+  _setupFilterTabs(mealType) {
+    const filterContainer = document.getElementById('meal-type-filter');
+    if (!filterContainer) return;
+    
+    filterContainer.querySelectorAll('.filter-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        // Update active state
+        filterContainer.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        // Filter recipes
+        const filter = tab.dataset.filter;
+        this._filterRecipesByType(filter);
+      });
+    });
+  },
+
+  _filterRecipesByType(tipo) {
+    const query = document.getElementById('recipe-search')?.value || '';
+    let recipes;
+    
+    if (query.trim()) {
+      // Combine search with type filter
+      const searched = Recipes.search(query);
+      recipes = Recipes.getByTipoComida(tipo).filter(r => 
+        searched.some(sr => sr.id === r.id)
+      );
+    } else {
+      recipes = Recipes.getByTipoComida(tipo);
+    }
+    
+    const container = document.getElementById('recipe-list');
+    if (!container) return;
+    
+    if (recipes.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state__icon">🔍</div>
+          <div class="empty-state__title">Sin resultados</div>
+        </div>
+      `;
+    } else {
+      container.innerHTML = recipes.map(r => `
+        <div class="recipe-card" onclick="App.selectRecipeForMeal('${r.id}')">
+          ${Components.recipeCard(r)}
+        </div>
+      `).join('');
+    }
+  },
+
+  selectRecipeForMeal(recipeId) {
+    if (!this.pendingMeal) return;
+
+    const { day, mealType } = this.pendingMeal;
+    const recipe = Recipes.getById(recipeId);
+
+    // Warning for dinner with carbs/sugar (solo aplica a semanas, no a plantilla)
+    if (!this._templateAssignmentMode && mealType === 'dinner' && !Recipes.isLowCarb(recipe)) {
+      if (!confirm(T.validation.cenaHighCarbs)) {
+        return;
+      }
+    }
+
+    if (this._templateAssignmentMode) {
+      Templates.assign(day, mealType, recipeId);
+      this._templateAssignmentMode = false;
+      Components.modal.close();
+      Components.toast.show('✅ Asignado a la plantilla');
+      this.renderTemplateView();
+    } else {
+      Menu.assign(day, mealType, recipeId);
+      Components.modal.close();
+      Components.toast.show(T.toast.mealAssigned);
+      this.renderMenuView();
+    }
+    this.pendingMeal = null;
+  },
+
+  openMealOptions(day, mealType, recipeId) {
+    const recipe = Recipes.getById(recipeId);
+    if (!recipe) return;
+
+    const optionsHtml = `
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button class="btn btn--primary btn--full" onclick="App.navigate('recipe', { id: '${recipeId}' })">
+          ${T.actions.viewRecipe}
+        </button>
+        <button class="btn btn--outline btn--full" onclick="App.replaceMeal('${day}', '${mealType}')">
+          ${T.menu.replaceMeal}
+        </button>
+        <button class="btn btn--danger btn--full" onclick="App.removeMeal('${day}', '${mealType}')">
+          ${T.menu.removeMeal}
+        </button>
+      </div>
+    `;
+
+    Components.modal.open(recipe.nombre, optionsHtml);
+  },
+
+  replaceMeal(day, mealType) {
+    Components.modal.close();
+    setTimeout(() => {
+      this.openRecipeSelector(day, mealType);
+    }, 300);
+  },
+
+  removeMeal(day, mealType) {
+    Menu.remove(day, mealType);
+    Components.modal.close();
+    Components.toast.show(T.toast.mealRemoved);
+    this.renderMenuView();
+  },
+
+  // ============================================
+  // Recipe Actions
+  // ============================================
+  // Abre el form de edición dentro de un modal (mejor UX que cambiar de pagina)
+  editRecipe(id) {
+    const recipe = Recipes.getById(id);
+    if (!recipe) {
+      Components.toast.show(T.toast.error || 'Receta no encontrada');
+      return;
+    }
+    Components.modal.open(T.recipe.editRecipe, Components.recipeForm(recipe, true));
+    // El submit se maneja inline con onsubmit en el form (más confiable)
+  },
+
+  // ========== AI: completar ingredientes y pasos de una receta ==========
+  async aiCompleteRecipe(id) {
+    const recipe = Recipes.getById(id);
+    if (!recipe) return;
+
+    if (!AI.hasKey()) {
+      Components.toast.show('Configurá tu API key en Ajustes → 🤖 Agente IA');
+      return;
+    }
+
+    // Mostrar modal con estado "generando"
+    Components.modal.open('🤖 Generando receta', `
+      <div style="text-align: center; padding: var(--space-lg);">
+        <div class="ai-spinner"></div>
+        <p style="margin-top: 16px; color: var(--color-text-muted);">
+          La IA está pensando ingredientes y pasos para<br>
+          <strong style="color: var(--color-text);">"${Components.escapeHtml(recipe.nombre)}"</strong>
+        </p>
+      </div>
+    `);
+
+    try {
+      const result = await AI.completeRecipe(recipe.nombre);
+
+      // Normalizar la respuesta de la IA: la API a veces devuelve
+      // los ingredientes con nombres de campo en inglés (name/quantity/unit)
+      // o como strings sueltos. Acá lo pasamos todo al formato interno.
+      const ings = AI.normalizeIngredients(result.ingredients ?? result.ingredientes);
+      const pasos = AI.normalizeSteps(result.steps ?? result.pasos);
+
+      if (ings.length === 0 && pasos.length === 0) {
+        Components.modal.open('🤖 Sin resultados', `
+          <div style="padding: var(--space-md);">
+            <p>La IA no devolvió ingredientes ni pasos para esta receta.</p>
+            <button class="btn btn--primary btn--full" onclick="Components.modal.close()">
+              Cerrar
+            </button>
+          </div>
+        `);
+        return;
+      }
+
+      // Guardamos los datos normalizados en App para que el botón
+      // "Guardar" los lea sin necesidad de inline JSON (que es frágil
+      // y se rompe con comillas, saltos de línea, etc.).
+      App._aiRecipeSuggestion = { id, ingredientes: ings, pasos };
+
+      // Mostrar preview + opción de aplicar o descartar
+      const previewHtml = `
+        <div style="padding: var(--space-md);">
+          <p style="color: var(--color-text-muted); margin-bottom: 16px;">
+            La IA generó esto para <strong>${Components.escapeHtml(recipe.nombre)}</strong>.
+            Revisalo y si te gusta, guardalo. Si no, podés editar después.
+          </p>
+
+          ${ings.length > 0 ? `
+            <h4 style="margin-bottom: 8px;">Ingredientes (${ings.length})</h4>
+            <ul style="margin-bottom: 16px; padding-left: 20px;">
+              ${ings.map(i => `<li>${Components.escapeHtml(i.nombre)} ${i.cantidad ? '(' + Components.escapeHtml(i.cantidad) + ' ' + Components.escapeHtml(i.unidad || '') + ')' : ''}</li>`).join('')}
+            </ul>
+          ` : ''}
+
+          ${pasos.length > 0 ? `
+            <h4 style="margin-bottom: 8px;">Pasos (${pasos.length})</h4>
+            <ol style="margin-bottom: 16px; padding-left: 20px;">
+              ${pasos.map(p => `<li>${Components.escapeHtml(p)}</li>`).join('')}
+            </ol>
+          ` : ''}
+
+          <div style="display: flex; gap: 8px; margin-top: 16px;">
+            <button class="btn btn--outline" onclick="Components.modal.close()">
+              Descartar
+            </button>
+            <button class="btn btn--primary" style="flex: 1;" id="btn-apply-ai-recipe">
+              💾 Guardar en la receta
+            </button>
+          </div>
+          <p style="font-size: 12px; color: var(--color-text-muted); margin-top: 12px;">
+            También podés tocar "Editar" después para ajustar antes de guardar.
+          </p>
+        </div>
+      `;
+      Components.modal.open('🤖 Receta sugerida', previewHtml);
+
+      // Bind del botón después de renderizar (evita inline JSON frágil)
+      const btn = document.getElementById('btn-apply-ai-recipe');
+      if (btn) btn.onclick = () => App.applyAiRecipeFromSuggestion();
+    } catch (err) {
+      console.error(err);
+      Components.modal.open('🤖 Error', `
+        <div style="padding: var(--space-md);">
+          <p style="color: var(--color-error); margin-bottom: 12px;">
+            ❌ ${Components.escapeHtml(err.message)}
+          </p>
+          <p style="font-size: 13px; color: var(--color-text-muted); margin-bottom: 16px;">
+            Verificá que la API key esté bien y que tengas conexión a internet.
+          </p>
+          <button class="btn btn--primary btn--full" onclick="Components.modal.close()">
+            Cerrar
+          </button>
+        </div>
+      `);
+    }
+  },
+
+  applyAiRecipe(id, ingredientes, pasos) {
+    const recipe = Recipes.getById(id);
+    if (!recipe) return;
+    Recipes.update(id, { ingredientes, pasos });
+    Components.toast.show('✅ Receta actualizada con IA');
+    Components.modal.close();
+    this.renderRecipeDetail(id);
+  },
+
+  // Variante que lee los datos de _aiRecipeSuggestion (estado seguro,
+  // no inline JSON en el onclick). Es lo que llama el botón del modal
+  // de sugerencia de IA.
+  applyAiRecipeFromSuggestion() {
+    const s = this._aiRecipeSuggestion;
+    if (!s || !s.id) {
+      Components.toast.show('❌ No hay sugerencia de IA para aplicar');
+      return;
+    }
+    this._aiRecipeSuggestion = null;
+    this.applyAiRecipe(s.id, s.ingredientes, s.pasos);
+  },
+
+  saveRecipe(isEdit = false) {
+    const form = document.getElementById('recipe-form');
+    if (!form) {
+      console.error('[saveRecipe] No se encontró el formulario');
+      Components.toast.show('❌ Error: no se encontró el formulario');
+      return;
+    }
+
+    try {
+      // Collect data
+      const id = form.querySelector('[name="id"]').value;
+      const nombre = form.querySelector('[name="nombre"]').value.trim();
+
+      if (!nombre) {
+        Components.toast.show(T.validation.nameRequired);
+        return;
+      }
+
+      // Ingredients
+      const ingredientes = [];
+      const names = form.querySelectorAll('[name="ing_nombre[]"]');
+      const quantities = form.querySelectorAll('[name="ing_cantidad[]"]');
+      const units = form.querySelectorAll('[name="ing_unidad[]"]');
+
+      names.forEach((input, i) => {
+        if (input.value.trim()) {
+          ingredientes.push({
+            nombre: input.value.trim(),
+            cantidad: quantities[i].value.trim(),
+            unidad: units[i].value || 'none'
+          });
+        }
+      });
+
+      // Steps
+      const pasos = [];
+      form.querySelectorAll('[name="pasos[]"]').forEach(textarea => {
+        if (textarea.value.trim()) {
+          pasos.push(textarea.value.trim());
+        }
+      });
+
+      // Nutrition
+      const nutricion = {
+        cal: parseInt(form.querySelector('[name="nut_cal"]').value) || 0,
+        hc: parseInt(form.querySelector('[name="nut_hc"]').value) || 0,
+        proteinas: parseInt(form.querySelector('[name="nut_proteinas"]').value) || 0,
+        grasas: parseInt(form.querySelector('[name="nut_grasas"]').value) || 0
+      };
+
+      const recipeData = {
+        nombre,
+        ingredientes,
+        pasos,
+        nutricion,
+        imagen: (form.querySelector('[name="imagen"]')?.value || '').trim(),
+        tipoComida: form.querySelector('[name="tipoComida"]:checked')?.value || 'ambos',
+        tags: (form.querySelector('[name="tags"]')?.value || '')
+                .split(',')
+                .map(t => t.trim().toLowerCase())
+                .filter(Boolean),
+        link: (form.querySelector('[name="link"]')?.value || '').trim(),
+      };
+
+      if (isEdit && id) {
+        Recipes.update(id, recipeData);
+      } else {
+        Recipes.create(recipeData);
+      }
+
+      // Verificación defensiva: si la receta sigue en memoria, el save
+      // funcionó. Útil para detectar casos raros (cuota de localStorage
+      // llena, JSON circular, etc.) y avisarle al usuario.
+      const savedId = id || (Recipes.getAll()[Recipes.getAll().length - 1]?.id);
+      const saved = savedId ? Recipes.getById(savedId) : null;
+      if (!saved) {
+        throw new Error('La receta no se encontró después de guardar');
+      }
+
+      Components.toast.show(T.toast.recipeSaved);
+      Components.modal.close();
+      // Si estabamos editando, refrescar el detalle con los nuevos datos.
+      // Si era nueva, ir a la lista de recetas.
+      if (id) {
+        this.renderRecipeDetail(id);
+      } else {
+        this.navigate('recipes');
+      }
+    } catch (err) {
+      console.error('[saveRecipe] Error guardando receta:', err);
+      Components.toast.show('❌ No se pudo guardar: ' + (err.message || err));
+    }
+  },
+
+  deleteRecipe(id) {
+    if (confirm('¿Eliminar esta receta?')) {
+      Recipes.delete(id);
+      // También borrar en Supabase (pushRecipes no borra, solo upserta).
+      DB.deleteRecipe(id);
+      Components.toast.show(T.toast.recipeDeleted);
+      this.navigate('recipes');
+    }
+  },
+
+  filterRecipes() {
+    const query = document.getElementById('recipe-search').value;
+    const recipes = Recipes.search(query);
+    
+    // Check if we're in the recipes list view
+    const listContainer = document.getElementById('recipe-list-container');
+    if (listContainer) {
+      if (recipes.length === 0) {
+        listContainer.innerHTML = Components.emptyState('🔍', 'Sin resultados', 'Prueba con otra búsqueda');
+      } else {
+        listContainer.innerHTML = recipes.map(r => Components.recipeCard(r)).join('');
+        listContainer.querySelectorAll('.recipe-card').forEach(card => {
+          card.addEventListener('click', () => {
+            const id = card.dataset.recipeId;
+            this.navigate('recipe', { id });
+          });
+        });
+      }
+      return;
+    }
+    
+    // Check if we're in the recipe selector modal
+    const modalList = document.getElementById('recipe-list');
+    if (modalList) {
+      if (recipes.length === 0) {
+        modalList.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state__icon">🔍</div>
+            <div class="empty-state__title">Sin resultados</div>
+          </div>
+        `;
+      } else {
+        modalList.innerHTML = recipes.map(r => `
+          <div class="recipe-card" onclick="App.selectRecipeForMeal('${r.id}')">
+            ${Components.recipeCard(r)}
+          </div>
+        `).join('');
+      }
+    }
+  },
+
+  // ============================================
+  // UI Helpers
+  // ============================================
+  _updateNav(active) {
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+      tab.classList.toggle('active', tab.dataset.view === active);
+    });
+    document.getElementById('nav-tabs').classList.toggle('hidden', active === null);
+  },
+
+  _updateHeader(title, showBack) {
+    const backBtn = document.getElementById('btn-back');
+    const headerTitle = document.getElementById('header-title');
+    
+    backBtn.classList.toggle('hidden', !showBack);
+    if (!showBack) {
+      headerTitle.textContent = title;
+    }
+  },
+
+  _updateHeaderTitle(title) {
+    document.getElementById('header-title').textContent = title;
+  },
+
+  // Footer con version + timestamp de sincronizacion.
+  // Se agrega al final del main-content de cualquier vista activa.
+  _renderFooter() {
+    return `
+      <div class="app-footer">
+        <span>${App.VERSION}</span>
+        <span id="sync-indicator">${this._renderSyncIndicatorInner()}</span>
+      </div>`;
+  },
+
+  // Renderiza SOLO el contenido del indicador de sync (✓ / ⚠️).
+  // Se llama tanto al pintar el footer como al actualizarlo por evento.
+  _renderSyncIndicatorInner() {
+    if (!DB.isAuth()) return '';
+    const pending = DB.getTotalPendingErrors ? DB.getTotalPendingErrors() : 0;
+    if (pending > 0) {
+      return `<span class="app-footer__sync app-footer__sync--error" title="${pending} cambio(s) sin sincronizar a la nube">⚠️ ${pending} sin sincronizar</span>`;
+    }
+    return '<span class="app-footer__sync" title="Todos los cambios están en la nube">✓ sincronizado</span>';
+  },
+
+  // Actualiza solo el span del indicador sin re-renderizar la vista.
+  // Se dispara cuando DB emite el evento "db:sync-state-changed".
+  _updateSyncIndicator() {
+    const el = document.getElementById('sync-indicator');
+    if (!el) return; // La vista actual no tiene footer renderizado todavía
+    el.innerHTML = this._renderSyncIndicatorInner();
+  },
+};
+
+// Event listener global: cuando cambia el estado de sync en DB,
+// refrescamos el indicador del footer sin tocar el resto de la vista.
+window.addEventListener('db:sync-state-changed', () => {
+  if (typeof App !== 'undefined' && App._updateSyncIndicator) {
+    App._updateSyncIndicator();
+  }
+});
+
+// Initialize when DOM ready
+document.addEventListener('DOMContentLoaded', () => App.init());

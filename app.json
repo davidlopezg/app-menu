@@ -1,35 +1,35 @@
 {
   "expo": {
-    "name": "app-menu-new",
-    "slug": "app-menu-new",
+    "name": "Menu Semanal",
+    "slug": "menu-semanal",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "appmenunew",
+    "icon": "./assets/images/icon.svg",
+    "scheme": "menu-semanal",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/icon.svg"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#2D6A4F",
+        "foregroundImage": "./assets/images/icon.svg",
+        "backgroundImage": "./assets/images/icon.svg",
+        "monochromeImage": "./assets/images/icon.svg"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "server",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/icon-192.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
+          "backgroundColor": "#2D6A4F",
+          "image": "./assets/images/icon.svg",
           "imageWidth": 76
         }
       ]
