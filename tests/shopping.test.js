@@ -10,7 +10,7 @@ function loadJsdom() {
 }
 const { JSDOM } = loadJsdom();
 
-const ROOT = '/data/data/com.termux/files/home/repos/app-menu';
+const ROOT = require('node:path').join(__dirname, '..');
 const dom = new JSDOM('<!DOCTYPE html><body></body>', { pretendToBeVisual: true });
 global.window = dom.window;
 global.document = dom.window.document;
@@ -282,6 +282,66 @@ check('la fusión repetida no duplica tickets', Shopping.getTickets().length ===
 Shopping.removeTicket(ticket.id);
 check('al borrar el ticket desaparece', Shopping.getTickets().length === 1);
 
+console.log('\n=== OFERTAS POR TIENDA (issue #2) ===');
+// El mismo ingrediente se llama distinto en cada tienda:
+// "Plátano de Canarias extra" en Mercadona, "Plátano canario ECO" en Carrefour.
+const carrefour = Shopping.getTiendas().find(t => t.nombre === 'Carrefour');
+Shopping.addManual({ nombre: 'Plátano', cantidad: '1 kg' });
+Shopping.setPrecioEnTienda('Plátano', mercadona3.id, 'Plátano de Canarias extra', 1.99);
+Shopping.setPrecioEnTienda('Plátano', carrefour.id, 'Plátano canario ECO', 1.79);
+
+const ofertas = Shopping.getOfertas('Plátano');
+check('hay una oferta por tienda', ofertas.length === 2,
+  ofertas.map(o => `${o.tienda.nombre}: ${o.nombreProducto} ${o.precio}`).join(' | '));
+check('cada oferta lleva el nombre que tiene el producto ahí',
+  ofertas.some(o => o.tienda.nombre === 'Mercadona' && o.nombreProducto === 'Plátano de Canarias extra' && o.precio === 1.99) &&
+  ofertas.some(o => o.tienda.nombre === 'Carrefour' && o.nombreProducto === 'Plátano canario ECO' && o.precio === 1.79),
+  ofertas.map(o => `${o.tienda.nombre}=${o.nombreProducto}`).join(' | '));
+check('el precio de la fila es el más barato (Carrefour 1,79)', Shopping.mejorPrecio('Plátano')?.precio === 1.79,
+  String(Shopping.mejorPrecio('Plátano')?.precio));
+check('el nombre que se usa en cada tienda se recuerda',
+  Shopping.nombresPorTienda('Plátano')[mercadona3.id] === 'Plátano de Canarias extra' &&
+  Shopping.nombresPorTienda('Plátano')[carrefour.id] === 'Plátano canario ECO');
+
+const itemsO = Shopping.buildList();
+const platanoItem = itemsO.find(i => i.nombre === 'Plátano');
+check('la fila del plátano trae las ofertas de cada tienda', platanoItem?.ofertas?.length === 2,
+  JSON.stringify(platanoItem?.ofertas?.map(o => o.tienda.nombre)));
+check('la fila usa el precio más barato', platanoItem?.precio === 1.79 && platanoItem?.tienda?.nombre === 'Carrefour',
+  `${platanoItem?.precio} ${platanoItem?.tienda?.nombre}`);
+check('la fila guarda el nombre del producto en la tienda',
+  platanoItem?.nombreProducto === 'Plátano canario ECO', platanoItem?.nombreProducto);
+
+// un ticket de Mercadona NO tiene que pisar el precio del plátano de Carrefour
+const ticket2 = Shopping.addTicket({
+  fecha: '2026-11-25',
+  tiendaId: mercadona3.id,
+  tiendaNombre: 'Mercadona',
+  lineas: [{ descripcion: 'PLATANO CANARIO 1KG', cantidad: '1', precioTotal: '1,85', ingrediente: 'Plátano', precioGuardado: true }],
+  total: '1,85',
+  marcarComprado: false,
+});
+const ofMercadona = Shopping.getOfertas('Plátano').find(o => o.tienda.nombre === 'Mercadona');
+const ofCarrefour = Shopping.getOfertas('Plátano').find(o => o.tienda.nombre === 'Carrefour');
+check('el ticket actualiza el precio de SU tienda', ofMercadona?.precio === 1.85, String(ofMercadona?.precio));
+check('y no toca el de la otra tienda', ofCarrefour?.precio === 1.79, String(ofCarrefour?.precio));
+check('el ticket de la lista sigue guardado', Shopping.getTicket(ticket2.id) !== null);
+
+// un producto que solo existe en Mercadona: el ticket de Lidl crea su entrada
+Shopping.setPrecioEnTienda('Leche', mercadona3.id, 'Leche entera 1L', 1.15);
+Shopping.addTicket({
+  fecha: '2026-11-25',
+  tiendaId: lidl3.id,
+  tiendaNombre: 'Lidl',
+  lineas: [{ descripcion: 'LECHE DESNATADA 1L', cantidad: '1', precioTotal: '0,95', ingrediente: 'Leche', precioGuardado: true }],
+  total: '0,95',
+  marcarComprado: false,
+});
+const lecheLidl = Shopping.getOfertas('Leche').find(o => o.tienda.nombre === 'Lidl');
+check('la tienda que no lo tenía recibe su propia entrada con el nombre del ticket',
+  lecheLidl?.nombreProducto === 'Leche Desnatada 1l' && lecheLidl?.precio === 0.95,
+  `${lecheLidl?.nombreProducto} ${lecheLidl?.precio}`);
+
 console.log('\n=== RENDER (smoke) ===');
 document.body.innerHTML = `
   <header><button id="btn-back"></button><h1 id="header-title"></h1><button id="btn-menu"></button></header>
@@ -291,7 +351,7 @@ global.Components = {
   escapeHtml: s => String(s ?? ''),
   mealCell: () => '<div class="meal-cell"></div>',
   toast: { show: () => {} },
-  modal: { open() {}, close() {} },
+  modal: { open(t, c) { global.__modal = c; }, close() {} },
 };
 global.DB = { isAuth: () => false };
 global.Templates = { hasAny: () => false };
@@ -314,6 +374,21 @@ check('la vista de tickets se renderiza', tHtml.includes('🧾'), tHtml.slice(0,
 check('tiene el botón de escanear ticket', tHtml.includes('App.openScanTicketModal'));
 check('lista los tickets guardados', tHtml.includes('Lidl'), tHtml.replace(/<[^>]+>/g, ' ').slice(0, 120));
 check('muestra el gasto del mes', tHtml.includes('este mes'));
+
+console.log('\n=== RENDER DE LAS OFERTAS ===');
+App.renderShoppingView();
+const htmlO = document.getElementById('main-content').innerHTML;
+check('la fila muestra el precio de cada tienda', htmlO.includes('shop-oferta'), '');
+check('con el nombre del producto en cada tienda',
+  htmlO.includes('Plátano de Canarias extra') && htmlO.includes('Plátano canario ECO'), '');
+check('marca el más barato', htmlO.includes('shop-oferta--best'));
+
+App.openPriceModal(Shopping._norm('Plátano'));
+const modalHtml = global.__modal || '';
+check('el modal de precios lista las ofertas con su nombre',
+  modalHtml.includes('Plátano de Canarias extra') && modalHtml.includes('Plátano canario ECO'), modalHtml.slice(0, 120));
+check('el modal deja escribir el nombre en esa tienda',
+  modalHtml.includes('sp-producto') && modalHtml.includes('Nombre en esa tienda'), '');
 
 const failed = results.filter(r => !r).length;
 console.log(`\n${results.length - failed}/${results.length} tests OK`);

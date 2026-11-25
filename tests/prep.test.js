@@ -10,7 +10,7 @@ function loadJsdom() {
 }
 const { JSDOM } = loadJsdom();
 
-const ROOT = '/data/data/com.termux/files/home/repos/app-menu';
+const ROOT = require('node:path').join(__dirname, '..');
 const dom = new JSDOM('<!DOCTYPE html><body></body>', { pretendToBeVisual: true });
 global.window = dom.window;
 global.document = dom.window.document;

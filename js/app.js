@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v50 (2026-11-19)',
+  VERSION: 'v51 (2026-11-25)',
 
   // ============================================
   // Initialize
@@ -1061,6 +1061,7 @@ const App = {
                      <span class="shop-item__shop">${Components.escapeHtml(it.tienda.nombre)}</span>`
                   : ''}
               </div>
+              ${this._ofertasHtml(it)}
               <div class="shop-item__from">${Components.escapeHtml(origen)}</div>
             </div>
             <button class="shop-item__tag" onclick="App.openPriceModal('${Components.escapeHtml(it.key)}')"
@@ -1074,6 +1075,33 @@ const App = {
 
     html += this._renderFooter();
     main.innerHTML = html;
+  },
+
+  // El precio de este producto en cada tienda, con el nombre que tiene ahí
+  // ("Plátano de Canarias" en Mercadona, "Plátano canario" en Carrefour).
+  _ofertasHtml(it) {
+    const ofertas = it.ofertas || [];
+    if (!ofertas.length) return '';
+    return `
+      <div class="shop-ofertas">
+        ${ofertas.map(o => {
+          const esMejor = it.precio !== null && o.precio === it.precio;
+          return `
+          <div class="shop-oferta ${esMejor ? 'shop-oferta--best' : ''}">
+            <span class="shop-oferta__shop">🏪 ${Components.escapeHtml(o.tienda.nombre)}</span>
+            <span class="shop-oferta__name">${Components.escapeHtml(o.nombreProducto)}</span>
+            <span class="shop-oferta__price">${Shopping._precio(o.precio)}</span>
+            ${esMejor ? '<span class="shop-oferta__best">💰 mejor</span>' : ''}
+          </div>`;
+        }).join('')}
+      </div>`;
+  },
+
+  // El nombre que tiene el producto en una tienda concreta (si lo hay)
+  _nombreEnTienda(it, tienda) {
+    if (!tienda) return null;
+    const oferta = (it.ofertas || []).find(o => o.tienda.id === tienda.id);
+    return oferta ? oferta.nombreProducto : null;
   },
 
   toggleBought(key) {
@@ -1174,18 +1202,23 @@ const App = {
     if (!item) return;
 
     const tiendas = Shopping.getTiendas();
+    const ofertas = item.ofertas || [];
     const productos = Shopping.getProductosDe(item.nombre);
-    const prod = productos[0] || null;
-    const precios = prod ? Shopping.getPreciosDe(prod.id) : [];
+    const porTienda = Shopping.nombresPorTienda(item.nombre);
 
-    const listaPrecios = precios.length ? `
+    // la tienda que se abre: la más barata del producto (o la primera)
+    const tiendaInicial = (item.tienda && item.tienda.id) || (tiendas[0] && tiendas[0].id) || '';
+    const nombreInicial = porTienda[tiendaInicial] || (productos[0] && productos[0].nombre) || item.nombre;
+
+    const listaPrecios = ofertas.length ? `
       <div class="shop-prices">
         <h4>Precios que ya tenés</h4>
-        ${precios.map(p => `
+        ${ofertas.map(o => `
           <div class="shop-prices__row">
-            <span>${Components.escapeHtml(p.tienda.nombre)}</span>
-            <b>${Shopping._precio(p.precio)}</b>
-            <button class="btn btn--ghost btn--xs" onclick="App.removePrice('${prod.id}','${p.tiendaId}')">✕</button>
+            <span>🏪 ${Components.escapeHtml(o.tienda.nombre)}</span>
+            <span class="shop-prices__name">${Components.escapeHtml(o.nombreProducto)}</span>
+            <b>${Shopping._precio(o.precio)}</b>
+            <button class="btn btn--ghost btn--xs" onclick="App.removePrice('${o.productoId}','${o.tiendaId}')">✕</button>
           </div>`).join('')}
       </div>` : '';
 
@@ -1196,16 +1229,24 @@ const App = {
       </p>
 
       <label style="font-size: 13px; color: var(--color-text-muted);">Tienda</label>
-      <select id="sp-tienda" class="form-input" style="margin-bottom: 12px;">
-        ${tiendas.map(t => `<option value="${t.id}">${Components.escapeHtml(t.nombre)}</option>`).join('')}
+      <select id="sp-tienda" class="form-input" style="margin-bottom: 12px;"
+              onchange="App.onPriceStoreChange('${Components.escapeHtml(key)}')">
+        ${tiendas.map(t => `<option value="${t.id}" ${t.id === tiendaInicial ? 'selected' : ''}>${Components.escapeHtml(t.nombre)}</option>`).join('')}
       </select>
       <button class="btn btn--outline btn--sm" style="margin-bottom: 12px;" onclick="App.addStoreFromPriceModal()">
         ➕ Nueva tienda
       </button>
 
-      <label style="font-size: 13px; color: var(--color-text-muted);">Producto (escribí lo mismo en cada tienda para comparar)</label>
-      <input type="text" id="sp-producto" class="form-input"
-             value="${Components.escapeHtml(prod?.nombre || item.nombre)}" style="margin-bottom: 12px;">
+      <label style="font-size: 13px; color: var(--color-text-muted);">Nombre en esa tienda</label>
+      <input type="text" id="sp-producto" class="form-input" list="sp-nombres"
+             value="${Components.escapeHtml(nombreInicial)}" style="margin-bottom: 4px;">
+      <datalist id="sp-nombres">
+        ${productos.map(p => `<option value="${Components.escapeHtml(p.nombre)}"></option>`).join('')}
+      </datalist>
+      <p style="font-size: 12px; color: var(--color-text-muted); margin: 0 0 12px;">
+        En cada tienda el producto se llama distinto (ej: "Plátano de Canarias" en Mercadona,
+        "Plátano canario" en Carrefour).
+      </p>
 
       <label style="font-size: 13px; color: var(--color-text-muted);">Precio (€)</label>
       <input type="number" id="sp-precio" class="form-input" step="0.01" min="0"
@@ -1220,6 +1261,18 @@ const App = {
     `);
   },
 
+  // Al cambiar de tienda, el nombre del producto se pone el que ya se usa
+  // en esa tienda (si lo hay).
+  onPriceStoreChange(key) {
+    const items = Shopping.buildList();
+    const item = items.find(i => i.key === key);
+    if (!item) return;
+    const tiendaId = document.getElementById('sp-tienda')?.value;
+    const nombre = Shopping.nombresPorTienda(item.nombre)[tiendaId];
+    const inp = document.getElementById('sp-producto');
+    if (inp && nombre) inp.value = nombre;
+  },
+
   savePrice(key) {
     const items = Shopping.buildList();
     const item = items.find(i => i.key === key);
@@ -1232,8 +1285,7 @@ const App = {
       return;
     }
 
-    const producto = Shopping.ensureProducto({ ingrediente: item.nombre, nombre });
-    Shopping.setPrecio(producto.id, tiendaId, precio);
+    Shopping.setPrecioEnTienda(item.nombre, tiendaId, nombre, precio);
     Components.modal.close();
     Components.toast.show(`✅ ${Shopping._precio(precio)} en ${Shopping.getTienda(tiendaId).nombre}`);
     this.renderShoppingView();
@@ -1334,11 +1386,14 @@ const App = {
             <span class="shop-group__total">${Shopping._precio(g.total)}</span>
           </div>
           <ul class="shop-group__items">
-            ${g.items.map(it => `
+            ${g.items.map(it => {
+              const nombreTienda = this._nombreEnTienda(it, g.tienda);
+              return `
               <li>
-                <span>${Components.escapeHtml(it.nombre)}</span>
+                <span>${Components.escapeHtml(it.nombre)}${nombreTienda ? ` <span class="shop-group__prod">— ${Components.escapeHtml(nombreTienda)}</span>` : ''}</span>
                 <span class="shop-group__price">${it.precio !== null ? Shopping._precio(it.precio) : '—'}</span>
-              </li>`).join('')}
+              </li>`;
+            }).join('')}
           </ul>
           ${g.sinPrecio ? `<div class="shop-group__note">${g.sinPrecio} sin precio cargado</div>` : ''}
         </div>`;
@@ -1529,7 +1584,12 @@ const App = {
     return {
       tiendas: Shopping.getTiendas().map(t => t.nombre),
       ingredientes: [...ingredientes.values()].sort((a, b) => a.localeCompare(b, 'es')),
-      productos: Shopping.getProductos().map(p => `${p.nombre} [${Shopping._labelDe(p.ingrediente)}]`),
+      // cada producto con las tiendas donde ya se sabe su precio (el mismo
+      // producto se llama distinto en cada tienda)
+      productos: Shopping.getProductos().map(p => {
+        const tiendas = Shopping.getPreciosDe(p.id).map(x => x.tienda.nombre);
+        return `${p.nombre} [${Shopping._labelDe(p.ingrediente)}]${tiendas.length ? ' @ ' + tiendas.join(', ') : ''}`;
+      }),
     };
   },
 
@@ -1615,7 +1675,7 @@ const App = {
         </div>
         <div style="flex:1;">
           <label style="font-size: 13px; color: var(--color-text-muted);">Tienda</label>
-          <select id="tk-tienda-sel" class="form-input">
+          <select id="tk-tienda-sel" class="form-input" onchange="App.onTicketStoreChange()">
             <option value="">— otra —</option>
             ${tiendas.map(t => `<option value="${t.id}" ${t.id === tiendaId ? 'selected' : ''}>${Components.escapeHtml(t.nombre)}</option>`).join('')}
           </select>
@@ -1635,6 +1695,8 @@ const App = {
         ${ctx.ingredientes.map(i => `<option value="${Components.escapeHtml(i)}"></option>`).join('')}
       </datalist>
 
+      <div id="tk-nombres" style="font-size: 12px; color: var(--color-text-muted); margin-top: 8px;"></div>
+
       <div style="display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap;">
         <label style="font-size:13px;color:var(--color-text-muted);">Total</label>
         <input type="number" id="tk-total" class="form-input" step="0.01" inputmode="decimal"
@@ -1649,6 +1711,24 @@ const App = {
         <button class="btn btn--ghost" onclick="Components.modal.close()">Cancelar</button>
       </div>
     `);
+
+    this.onTicketStoreChange();
+  },
+
+  // Los nombres que ya se usan para los productos en la tienda del ticket
+  // (en cada supermercado el producto se llama distinto).
+  onTicketStoreChange() {
+    const box = document.getElementById('tk-nombres');
+    if (!box) return;
+    const tiendaId = document.getElementById('tk-tienda-sel')?.value;
+    if (!tiendaId) { box.innerHTML = ''; return; }
+    const tienda = Shopping.getTienda(tiendaId);
+    const nombres = Shopping.getProductos()
+      .filter(p => Shopping.getPreciosDe(p.id).some(x => x.tiendaId === tiendaId))
+      .map(p => `${p.nombre} (${Shopping._labelDe(p.ingrediente)})`);
+    box.innerHTML = nombres.length
+      ? `En ${Components.escapeHtml(tienda.nombre)} ya tenés: ${nombres.map(n => Components.escapeHtml(n)).join(' · ')}`
+      : '';
   },
 
   // "PATATAS 1KG" → "Patatas 1kg" (nombre del producto en el libro)

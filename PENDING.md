@@ -1,3 +1,42 @@
+# PENDING — Sesión del 2026-11-25 (v51)
+
+## El producto con el nombre de cada tienda (issue #2)
+
+El issue #2 pedía conciliar la lista de productos con las compras del
+supermercado: el plátano tenía que poder tener dentro el precio del plátano
+en el Mercadona **con su nombre** y el precio del plátano en el Carrefour
+**con su nombre**, porque en cada supermercado las cosas se llaman distinto.
+
+### Qué hay ahora
+
+- **Cada fila de la lista muestra sus ofertas por tienda**:
+  - 🏪 Mercadona · **Plátano de Canarias extra** — 1,99 €
+  - 🏪 Carrefour · **Plátano canario ECO** — 1,79 € · 💰 más barato
+- El **modal 🏷️** lista todas las ofertas (tienda + nombre + precio, con su
+  ✕ para borrar) y deja cambiar de tienda: el campo **"Nombre en esa
+  tienda"** se pone solo con el nombre que ya usás en ese súper (o escribís
+  el nuevo, con autocompletado de los nombres que ya tenés).
+- **🗺️ Dónde comprar** y el **texto que copiás (📋)** llevan también el
+  nombre del producto en esa tienda.
+- Los **tickets** se concilian por tienda: el precio de una línea actualiza
+  el producto de **esa** tienda (busca primero el que se llama como en el
+  ticket y, si no, el que ya tiene precio ahí) y **no toca** el precio de las
+  otras tiendas. Si la tienda no tenía esa entrada, se crea con el nombre
+  del ticket ("PLATANO CANARIO 1KG" → "Plátano canario 1kg").
+
+### Bugs que se corrigieron de paso
+
+- El ticket usaba siempre el **primer** producto del ingrediente → el precio
+  de Mercadona acababa guardado sobre el producto de Carrefour (y al revés).
+- El modal de precios solo enseñaba los precios del primer producto: los de
+  las otras entradas quedaban escondidos (y no se podían borrar).
+- El generador del HTML legacy (`scripts/generate-legacy-html.ts`) metía los
+  14 scripts **14 veces** dentro de `src/components/legacy-web-html.ts`
+  (la app se ejecutaba 14 veces) → ahora se meten una sola.
+
+`tests/shopping.test.js`: **93 tests** (16 nuevos para las ofertas por tienda).
+Los 5 suites del repo corren: `node tests/*.test.js` (154 tests OK).
+
 # PENDING — Sesión del 2026-11-19 (v49)
 
 ## Tickets: foto del tiquet → registro de compra + precios por supermercado
