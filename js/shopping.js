@@ -386,7 +386,8 @@ const Shopping = {
         // ticket (cada tienda llama distinto a las cosas)
         l.productoId = this._productoDelTicket(l.ingrediente, l.descripcion, ticket.tiendaId).id;
       }
-      this.setPrecio(l.productoId, ticket.tiendaId, l.precioTotal);
+      const producto = this._data.productos.find(p => p.id === l.productoId);
+      this.setPrecio(l.productoId, ticket.tiendaId, this._precioLibro(l, producto));
     }
 
     // 2) marcar como comprado lo que coincide con la lista de esta semana
@@ -417,6 +418,19 @@ const Shopping = {
       .toLowerCase()
       .replace(/\b[a-záéíóúñ]/g, c => c.toUpperCase())
       .replace(/\b(de|del|la|el|los|las|y|con)\b/g, m => m.toLowerCase());
+  },
+
+  // Qué precio se guarda en el libro para una línea del ticket. En el libro
+  // va el precio de UNA unidad (o el €/kg si el súper lo vende por kilo), no
+  // el total de la línea: "2 x 1,79" son 1,79 por unidad, y "1,45 kg 2,10 €"
+  // son 1,45 €/kg.
+  _precioLibro(linea, producto) {
+    const total = linea.precioTotal;
+    const n = this._num(linea.cantidad);
+    const unidad = this._unidadVenta(producto && producto.unidad);
+    if (unidad === 'kg' && n && n > 0) return Math.round((total / n) * 100) / 100;
+    if (linea.precioUnit !== null && linea.precioUnit !== undefined) return linea.precioUnit;
+    return total;
   },
 
   // Si lo que escribió el usuario es el NOMBRE de un producto del libro
