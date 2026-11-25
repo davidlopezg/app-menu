@@ -1,3 +1,72 @@
+# PENDING — Sesión del 2026-11-25 (v52)
+
+## El precio con coma decimal no se guardaba (issue #2, segunda vuelta)
+
+La v51 enseñaba las ofertas por tienda, pero al **probar el flujo real** (no
+solo los tests de datos) salieron dos cosas:
+
+- **El input de precio era `type="number"`** → en Chrome/Safari "1,99" (coma
+  decimal, como escribe la gente en España) es un número inválido → el campo
+  queda vacío y **el precio no se guardaba nunca** (salía el aviso
+  "⚠️ Completá tienda, producto y precio"). Ahora los precios se escriben en
+  un campo de texto con `inputmode="decimal"` y el código acepta coma y punto.
+  Afectaba al modal 🏷️, al botón ➕ Producto y al total del ticket.
+- **Si en el ticket escribías el nombre del súper** ("Plátano canario") en
+  vez del ingrediente ("Plátano"), el precio se guardaba en una fila que no
+  era de la lista → no se conciliaba. Ahora el nombre del producto se
+  resuelve a su ingrediente del catálogo.
+- El **➕ Producto** ahora tiene **"Nombre en esa tienda"**: un producto que
+  no sale de las recetas también puede llamarse distinto en cada súper.
+
+### Test nuevo de punta a punta
+
+`tests/shopping-flow.test.js`: carga el `index.html` real en jsdom (mismos
+ids que la app) y **maneja la interfaz como el usuario**: abrir el modal,
+cambiar de tienda, escribir el nombre, guardar el precio, ver la lista, el
+reparto por tienda, el texto copiado y el ticket. 22 tests.
+
+`tests/`: 179 tests OK en total (7 dragdrop + 9 move-logic + 34 prep +
+11 ai-ticket + 96 shopping + 22 shopping-flow).
+
+# PENDING — Sesión del 2026-11-25 (v51)
+
+## El producto con el nombre de cada tienda (issue #2)
+
+El issue #2 pedía conciliar la lista de productos con las compras del
+supermercado: el plátano tenía que poder tener dentro el precio del plátano
+en el Mercadona **con su nombre** y el precio del plátano en el Carrefour
+**con su nombre**, porque en cada supermercado las cosas se llaman distinto.
+
+### Qué hay ahora
+
+- **Cada fila de la lista muestra sus ofertas por tienda**:
+  - 🏪 Mercadona · **Plátano de Canarias extra** — 1,99 €
+  - 🏪 Carrefour · **Plátano canario ECO** — 1,79 € · 💰 más barato
+- El **modal 🏷️** lista todas las ofertas (tienda + nombre + precio, con su
+  ✕ para borrar) y deja cambiar de tienda: el campo **"Nombre en esa
+  tienda"** se pone solo con el nombre que ya usás en ese súper (o escribís
+  el nuevo, con autocompletado de los nombres que ya tenés).
+- **🗺️ Dónde comprar** y el **texto que copiás (📋)** llevan también el
+  nombre del producto en esa tienda.
+- Los **tickets** se concilian por tienda: el precio de una línea actualiza
+  el producto de **esa** tienda (busca primero el que se llama como en el
+  ticket y, si no, el que ya tiene precio ahí) y **no toca** el precio de las
+  otras tiendas. Si la tienda no tenía esa entrada, se crea con el nombre
+  del ticket ("PLATANO CANARIO 1KG" → "Plátano canario 1kg").
+
+### Bugs que se corrigieron de paso
+
+- El ticket usaba siempre el **primer** producto del ingrediente → el precio
+  de Mercadona acababa guardado sobre el producto de Carrefour (y al revés).
+- El modal de precios solo enseñaba los precios del primer producto: los de
+  las otras entradas quedaban escondidos (y no se podían borrar).
+- El generador del HTML legacy (`scripts/generate-legacy-html.ts`) metía los
+  14 scripts **14 veces** dentro de `src/components/legacy-web-html.ts`
+  (la app se ejecutaba 14 veces) → ahora se meten una sola.
+
+`tests/shopping.test.js`: **93 tests** (16 nuevos para las ofertas por tienda).
+Los 5 suites del repo corren: `node tests/*.test.js` (154 tests OK).
+
 # PENDING — Sesión del 2026-11-19 (v49)
 
 ## Tickets: foto del tiquet → registro de compra + precios por supermercado

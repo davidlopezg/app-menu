@@ -377,14 +377,14 @@ const Shopping = {
     // 1) el precio del ticket va al libro de precios (producto + tienda)
     for (const l of ticket.lineas) {
       if (!l.precioGuardado || !l.ingrediente || !ticket.tiendaId || l.precioTotal === null) continue;
+      // si escribió el nombre del producto del súper ("Plátano canario"),
+      // el ingrediente real es el del catálogo ("Plátano")
+      l.ingrediente = this._ingredienteDe(l.ingrediente);
       if (!l.productoId) {
-        // el producto del libro: si ya existe para ese ingrediente, se usa;
-        // si no, se crea con el nombre que dice el ticket
-        const existentes = this.getProductosDe(l.ingrediente);
-        const producto = existentes.length
-          ? existentes[0]
-          : this.ensureProducto({ ingrediente: l.ingrediente, nombre: this._tituloNombre(l.descripcion) });
-        l.productoId = producto.id;
+        // el producto del libro: el que se llama como dice el ticket, o el
+        // que ya tiene precio en esa tienda, o uno nuevo con el nombre del
+        // ticket (cada tienda llama distinto a las cosas)
+        l.productoId = this._productoDelTicket(l.ingrediente, l.descripcion, ticket.tiendaId).id;
       }
       this.setPrecio(l.productoId, ticket.tiendaId, l.precioTotal);
     }
@@ -417,6 +417,51 @@ const Shopping = {
       .toLowerCase()
       .replace(/\b[a-záéíóúñ]/g, c => c.toUpperCase())
       .replace(/\b(de|del|la|el|los|las|y|con)\b/g, m => m.toLowerCase());
+  },
+
+  // Si lo que escribió el usuario es el NOMBRE de un producto del libro
+  // ("Plátano canario"), el ingrediente real es el de ese producto
+  // ("plátano") → así el precio le llega a la fila de la lista de la compra.
+  _ingredienteDe(nombre) {
+    const n = this._norm(nombre);
+    if (!n) return nombre;
+    const prods = this._data.productos;
+    let prod = prods.find(p => this._norm(p.nombre) === n);
+    if (!prod) {
+      prod = prods.find(p => {
+        const pn = this._norm(p.nombre);
+        return pn && (n.includes(pn) || pn.includes(n));
+      });
+    }
+    return prod ? this._canon(prod.ingrediente) : nombre;
+  },
+
+  // Qué producto del libro es el de esta línea del ticket:
+  //   1) el que se llama como dice el ticket ("PLATANO CANARIO 1KG" →
+  //      "Plátano canario"), el más específico si hay varios;
+  //   2) el que ya tiene precio en esa tienda;
+  //   3) uno nuevo con el nombre del ticket (esa tienda lo llama así).
+  _productoDelTicket(ingrediente, descripcion, tiendaId) {
+    const productos = this.getProductosDe(ingrediente);
+    if (!productos.length) {
+      return this.ensureProducto({ ingrediente, nombre: this._tituloNombre(descripcion) });
+    }
+    const d = this._norm(descripcion);
+    if (d) {
+      const cands = productos.filter(p => {
+        const n = this._norm(p.nombre);
+        if (!n) return false;
+        if (d.includes(n)) return true;
+        return d.length >= 3 && n.includes(d);
+      });
+      // el nombre más largo es el más específico ("Plátano de Canarias" > "Plátano")
+      cands.sort((a, b) => this._norm(b.nombre).length - this._norm(a.nombre).length);
+      if (cands[0]) return cands[0];
+    }
+    const enTienda = productos.find(p =>
+      this._data.precios.some(x => x.productoId === p.id && x.tiendaId === tiendaId));
+    if (enTienda) return enTienda;
+    return this.ensureProducto({ ingrediente, nombre: this._tituloNombre(descripcion) });
   },
 
   // ------------------------------------------------------------
@@ -506,7 +551,7 @@ const Shopping = {
     return this._data.extras[weekKey];
   },
 
-  addManual({ nombre, cantidad = '', categoria = '', precio = null, tiendaId = null }) {
+  addManual({ nombre, cantidad = '', categoria = '', precio = null, tiendaId = null, nombreTienda = '' }) {
     const n = (nombre || '').trim();
     if (!n) return null;
     const item = {
@@ -517,8 +562,10 @@ const Shopping = {
     };
     this._extras().items.push(item);
     // si viene con precio, se guarda en el libro → total y reparto funcionan
-    if (tiendaId && precio !== null && precio !== '' && !isNaN(parseFloat(precio))) {
-      const producto = this.ensureProducto({ ingrediente: n, nombre: n });
+    if (tiendaId && this._num(precio) !== null) {
+      // el nombre en esa tienda (si no, el mismo nombre del producto)
+      const nombreProd = String(nombreTienda || '').trim() || n;
+      const producto = this.ensureProducto({ ingrediente: n, nombre: nombreProd });
       this.setPrecio(producto.id, tiendaId, precio);
     }
     this._save();
@@ -553,8 +600,10 @@ const Shopping = {
   // Precios
   // ------------------------------------------------------------
   setPrecio(productoId, tiendaId, precio) {
-    const valor = Math.round(parseFloat(precio) * 100) / 100;
-    if (!productoId || !tiendaId || isNaN(valor)) return null;
+    // acepta "1,99" (coma) y "1.99" (punto)
+    const n = this._num(precio);
+    if (!productoId || !tiendaId || n === null) return null;
+    const valor = Math.round(n * 100) / 100;
     let p = this._data.precios.find(x => x.productoId === productoId && x.tiendaId === tiendaId);
     if (!p) {
       p = { id: Store.uuid(), productoId, tiendaId, precio: valor, actualizado_at: new Date().toISOString() };
@@ -580,13 +629,66 @@ const Shopping = {
       .sort((a, b) => a.precio - b.precio);
   },
 
+  // ------------------------------------------------------------
+  // Ofertas por tienda (issue #2)
+  // ------------------------------------------------------------
+  // El mismo ingrediente se llama distinto en cada supermercado:
+  // "Plátano de Canarias" en Mercadona, "Plátano canario" en Carrefour.
+  // Cada entrada del libro (un producto) tiene SU nombre y SUS precios
+  // por tienda → una oferta es "este ingrediente, en esta tienda, con este
+  // nombre y este precio".
+  getOfertas(ingrediente) {
+    const ofertas = [];
+    for (const prod of this.getProductosDe(ingrediente)) {
+      for (const p of this.getPreciosDe(prod.id)) {
+        ofertas.push({
+          tienda: p.tienda,
+          tiendaId: p.tiendaId,
+          producto: prod,
+          productoId: prod.id,
+          nombreProducto: prod.nombre,
+          precio: p.precio,
+        });
+      }
+    }
+    // por tienda y, dentro de la tienda, el más barato primero
+    return ofertas.sort((a, b) =>
+      a.tienda.nombre.localeCompare(b.tienda.nombre, 'es') || a.precio - b.precio);
+  },
+
+  // El precio de un ingrediente en una tienda concreta, con el nombre que
+  // tiene el producto ahí. null si esa tienda no lo tiene.
+  getOferta(ingrediente, tiendaId) {
+    return this.getOfertas(ingrediente).find(o => o.tiendaId === tiendaId) || null;
+  },
+
+  // El nombre que ya se usa para un ingrediente en cada tienda
+  // { [tiendaId]: "Plátano canario" }
+  nombresPorTienda(ingrediente) {
+    const out = {};
+    for (const o of this.getOfertas(ingrediente)) {
+      if (!out[o.tiendaId]) out[o.tiendaId] = o.nombreProducto;
+    }
+    return out;
+  },
+
+  // Poner el precio de un ingrediente en una tienda con el nombre que tiene
+  // el producto ahí ("Plátano canario" en Carrefour). Si ese nombre no está
+  // en el libro, se crea el producto con él.
+  setPrecioEnTienda(ingrediente, tiendaId, nombreProducto, precio) {
+    const nombre = String(nombreProducto || '').trim();
+    if (!nombre) return null;
+    const producto = this.ensureProducto({ ingrediente, nombre });
+    return this.setPrecio(producto.id, tiendaId, precio);
+  },
+
   // El precio más barato entre los productos del ingrediente
   mejorPrecio(ingrediente) {
     let mejor = null;
     for (const prod of this.getProductosDe(ingrediente)) {
       for (const p of this.getPreciosDe(prod.id)) {
         if (!mejor || p.precio < mejor.precio) {
-          mejor = { ...p, producto: prod };
+          mejor = { ...p, producto: prod, nombreProducto: prod.nombre };
         }
       }
     }
@@ -686,6 +788,9 @@ const Shopping = {
         producto,
         precio: precio ? precio.precio : null,
         tienda: precio ? precio.tienda : null,
+        // el precio y el nombre que tiene en cada tienda (issue #2)
+        ofertas: this.getOfertas(item.nombre),
+        nombreProducto: precio ? precio.nombreProducto : null,
         alternativas: producto ? this.getPreciosDe(producto.id) : [],
         comprado: this.isComprado(item.key),
       };
@@ -755,11 +860,17 @@ const Shopping = {
     });
   },
 
-  // Texto plano para copiar (con precios y tienda)
+  // Texto plano para copiar (con precios, tienda y el nombre del producto)
   textoLista(items) {
     const lineas = items.map(it => {
       const parts = [`- ${it.nombre}: ${it.cantidad}`];
-      if (it.precio !== null) parts.push(`(${Shopping._precio(it.precio)}${it.tienda ? ' en ' + it.tienda.nombre : ''})`);
+      if (it.precio !== null) {
+        const oferta = it.tienda
+          ? (it.ofertas || []).find(o => o.precio === it.precio && o.tienda.id === it.tienda.id)
+          : null;
+        parts.push(`(${Shopping._precio(it.precio)}${it.tienda ? ' en ' + it.tienda.nombre : ''}` +
+          `${oferta && oferta.nombreProducto ? ' — ' + oferta.nombreProducto : ''})`);
+      }
       return parts.join(' ');
     });
     const reparto = this.porTienda(items).filter(g => g.tienda);

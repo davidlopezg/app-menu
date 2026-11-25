@@ -33,7 +33,7 @@ MAIN.innerHTML = `
   </div>`;
 
 // cargar el módulo real
-const src = fs.readFileSync('/data/data/com.termux/files/home/repos/app-menu/js/dragdrop.js', 'utf8')
+const src = fs.readFileSync(require('node:path').join(__dirname, '..', 'js/dragdrop.js'), 'utf8')
   .replace(/^const DragDrop =/m, 'global.DragDrop =');
 eval(src);
 

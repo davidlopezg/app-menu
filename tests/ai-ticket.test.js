@@ -9,7 +9,7 @@ global.localStorage = {
   removeItem: k => { delete mem[k]; },
 };
 
-const src = fs.readFileSync('/data/data/com.termux/files/home/repos/app-menu/js/ai.js', 'utf8')
+const src = fs.readFileSync(require('node:path').join(__dirname, '..', 'js/ai.js'), 'utf8')
   .replace('const AI =', 'global.AI =')
   .replace(/document\.addEventListener\([^;]*;/g, '');
 
