@@ -39,3 +39,25 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+<!-- ux-audit:inicio -->
+## Flujo de trabajo con agentes (ux-audit)
+
+Reglas obligatorias para cualquier agente que trabaje en este repo.
+
+1. **Nunca** se edita con `main` activa. Antes de tocar nada:
+   `git branch --show-current`; si dice `main`, `git checkout -b ux/<nombre>`.
+2. Todo arreglo sale en una rama `ux/<nombre>` y termina en un PR con `Closes #N`.
+3. Antes del PR pasan los checks:
+   - `npm test` (las 6 suites de `tests/`)
+   Lint del diff: `BASE_SHA=$(git rev-parse origin/main) bash .github/scripts/lint-diff.sh`
+   (en este repo el lint del diff es `node --check` sobre los JS tocados:
+   no hay config de eslint, el código de la app es JS plano en `js/`).
+4. Si el cambio toca una pantalla o una regla de negocio, se actualiza la
+   documentación equivalente: el registro de cambios es **`PENDING.md`** (con la
+   versión y la fecha) y, si cambia el producto, `SPEC.md` / `TASKS.md`.
+5. **El merge lo pulsa la persona.** Ni el agente ni las herramientas fusionan.
+6. La app que se despliega (GitHub Pages) es la **web legacy** de la raíz
+   (`index.html`, `js/`, `css/`, `sw.js`); `src/` es el shell Expo en curso.
+   Un cambio de la web legacy se regenera con `node scripts/generate-legacy-html.ts`.
+<!-- ux-audit:fin -->
