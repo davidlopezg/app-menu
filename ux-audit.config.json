@@ -1,0 +1,8 @@
+{
+  "repo": "davidlopezg/app-menu",
+  "project": "app-menu",
+  "checks": ["npm test"],
+  "srcDirs": ["js/", "src/"],
+  "appDirs": [],
+  "docsFiles": ["PENDING.md"]
+}

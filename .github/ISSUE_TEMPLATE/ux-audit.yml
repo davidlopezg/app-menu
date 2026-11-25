@@ -1,0 +1,57 @@
+name: Hallazgo de auditoría (ux-audit)
+description: Resultado de la auditoría de usabilidad, lógica, código o producto.
+title: "[<categoría>] <resumen del problema>"
+labels: ["bug", "ux"]
+body:
+  - type: dropdown
+    id: categoria
+    attributes:
+      label: Categoría
+      options:
+        - UX/UI (cat:ux-ui)
+        - Lógica y reglas de negocio (cat:logica)
+        - Código e implementación (cat:codigo)
+        - Producto y requisitos (cat:producto)
+        - QA y verificación (cat:qa)
+        - Seguridad y datos (cat:seguridad)
+    validations:
+      required: true
+  - type: dropdown
+    id: severidad
+    attributes:
+      label: Severidad
+      options:
+        - critical — bloquea la tarea o pierde datos (severity:critical)
+        - high — abandono o error costoso (severity:high)
+        - medium — fricción con salida (severity:medium)
+        - low — molestia o cosmético (severity:low)
+    validations:
+      required: true
+  - type: input
+    id: modulo
+    attributes:
+      label: Módulo o área afectada
+    validations:
+      required: false
+  - type: textarea
+    id: descripcion
+    attributes:
+      label: Descripción
+      description: Qué ocurre y bajo qué condiciones.
+    validations:
+      required: true
+  - type: textarea
+    id: evidencia
+    attributes:
+      label: Evidencia
+      description: "Referencias archivo:línea, capturas o logs."
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: criterios
+    attributes:
+      label: Criterios de aceptación
+      description: "Condiciones observables para dar el arreglo por bueno."
+    validations:
+      required: false
