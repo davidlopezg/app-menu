@@ -513,7 +513,7 @@ const Shopping = {
     return this._data.productos.filter(p => this._norm(p.ingrediente) === ing);
   },
 
-  ensureProducto({ ingrediente, nombre, marca = '', tamano = '' }) {
+  ensureProducto({ ingrediente, nombre, marca = '', tamano = '', unidad = null, formato = null }) {
     let p = this.findProducto(ingrediente, nombre);
     if (!p) {
       p = {
@@ -523,14 +523,38 @@ const Shopping = {
         marca: marca.trim(),
         tamano: tamano.trim(),
         categoria: this._categoria(ingrediente, null),
+        unidad: this._unidadVenta(unidad),
+        formato: this._formato(formato),
       };
       this._data.productos.push(p);
     } else {
       if (marca) p.marca = marca.trim();
       if (tamano) p.tamano = tamano.trim();
+      // cómo lo vende el súper (€/kg o €/unidad) y cuánto pesa el formato
+      if (unidad) p.unidad = this._unidadVenta(unidad);
+      if (formato !== null && formato !== undefined && formato !== '') p.formato = this._formato(formato);
     }
     this._save();
     return p;
+  },
+
+  // Cómo lo vende un súper: por kilo (el precio es por kg/l) o por unidad
+  // (el precio es por pieza o por formato: una bolsa, una bandeja).
+  UNIDADES_VENTA: ['kg', 'ud', 'l'],
+
+  _unidadVenta(u) {
+    const n = this._norm(u);
+    if (n === 'kg' || n === 'kilo' || n === 'kilos' || n === 'kgs' || n === 'kg.') return 'kg';
+    if (n === 'l' || n === 'litro' || n === 'litros') return 'l';
+    return 'ud';
+  },
+
+  // Peso de una unidad en gramos ("500 g" → 500). null si no se sabe.
+  _formato(f) {
+    if (f === null || f === undefined || f === '') return null;
+    if (typeof f === 'number') return f > 0 ? Math.round(f) : null;
+    const n = this._num(String(f).replace(/\s*(g|gr|gramos?)\s*/gi, ''));
+    return n !== null && n > 0 ? Math.round(n) : null;
   },
 
   removeProducto(id) {
@@ -551,7 +575,7 @@ const Shopping = {
     return this._data.extras[weekKey];
   },
 
-  addManual({ nombre, cantidad = '', categoria = '', precio = null, tiendaId = null, nombreTienda = '' }) {
+  addManual({ nombre, cantidad = '', categoria = '', precio = null, tiendaId = null, nombreTienda = '', unidad = null, formato = null }) {
     const n = (nombre || '').trim();
     if (!n) return null;
     const item = {
@@ -565,7 +589,7 @@ const Shopping = {
     if (tiendaId && this._num(precio) !== null) {
       // el nombre en esa tienda (si no, el mismo nombre del producto)
       const nombreProd = String(nombreTienda || '').trim() || n;
-      const producto = this.ensureProducto({ ingrediente: n, nombre: nombreProd });
+      const producto = this.ensureProducto({ ingrediente: n, nombre: nombreProd, unidad, formato });
       this.setPrecio(producto.id, tiendaId, precio);
     }
     this._save();
@@ -637,10 +661,30 @@ const Shopping = {
   // Cada entrada del libro (un producto) tiene SU nombre y SUS precios
   // por tienda → una oferta es "este ingrediente, en esta tienda, con este
   // nombre y este precio".
-  getOfertas(ingrediente) {
+  //
+  // Y además cada súper lo vende distinto: uno lo vende POR KILO (4,50 €/kg)
+  // y otro POR UNIDAD o por formato (bolsa de 500 g, 1,79 €). Para poder
+  // compararlos hace falta la misma base:
+  //   coste   → lo que se paga por la cantidad que pide la lista
+  //   porKilo → el precio por kilo (la base comparable entre tiendas)
+  getOfertas(ingrediente, item = null) {
     const ofertas = [];
     for (const prod of this.getProductosDe(ingrediente)) {
+      const unidad = this._unidadVenta(prod.unidad);
+      const formato = prod.formato || null;
       for (const p of this.getPreciosDe(prod.id)) {
+        const gramos = this._gramos(item, formato);
+        let coste = p.precio;
+        if (unidad === 'kg' || unidad === 'l') {
+          // el precio es por kilo: se proratea a lo que pide la lista
+          coste = gramos ? (p.precio * gramos) / 1000 : p.precio;
+        } else if (formato && gramos) {
+          // el precio es por formato (bolsa de 500 g): se proratea también
+          coste = (p.precio * gramos) / formato;
+        }
+        const porKilo = (unidad === 'kg' || unidad === 'l')
+          ? p.precio
+          : (formato ? (p.precio * 1000) / formato : null);
         ofertas.push({
           tienda: p.tienda,
           tiendaId: p.tiendaId,
@@ -648,18 +692,47 @@ const Shopping = {
           productoId: prod.id,
           nombreProducto: prod.nombre,
           precio: p.precio,
+          unidad,
+          formato,
+          gramos,
+          coste: Math.round(coste * 100) / 100,
+          porKilo: porKilo !== null ? Math.round(porKilo * 100) / 100 : null,
         });
       }
     }
     // por tienda y, dentro de la tienda, el más barato primero
     return ofertas.sort((a, b) =>
-      a.tienda.nombre.localeCompare(b.tienda.nombre, 'es') || a.precio - b.precio);
+      a.tienda.nombre.localeCompare(b.tienda.nombre, 'es') || a.coste - b.coste);
+  },
+
+  // Cuántos gramos pide la lista para este producto (si lo sabemos).
+  _gramos(item, formato = null) {
+    const c = (item && item.cantidades) || {};
+    let g = 0;
+    if (c.g) g += c.g;
+    if (c.kg) g += c.kg * 1000;
+    if (c.l) g += c.l * 1000;
+    // "2 pimientos" de 150 g cada uno → 300 g (si se conoce el formato)
+    if (c.ud && formato) g += c.ud * formato;
+    return g > 0 ? g : null;
   },
 
   // El precio de un ingrediente en una tienda concreta, con el nombre que
   // tiene el producto ahí. null si esa tienda no lo tiene.
   getOferta(ingrediente, tiendaId) {
     return this.getOfertas(ingrediente).find(o => o.tiendaId === tiendaId) || null;
+  },
+
+  // Lo que ya se sabe de un ingrediente en cada tienda: nombre, unidad y
+  // peso del formato.
+  datosPorTienda(ingrediente) {
+    const out = {};
+    for (const o of this.getOfertas(ingrediente)) {
+      if (!out[o.tiendaId]) {
+        out[o.tiendaId] = { nombre: o.nombreProducto, unidad: o.unidad, formato: o.formato };
+      }
+    }
+    return out;
   },
 
   // El nombre que ya se usa para un ingrediente en cada tienda
@@ -673,26 +746,34 @@ const Shopping = {
   },
 
   // Poner el precio de un ingrediente en una tienda con el nombre que tiene
-  // el producto ahí ("Plátano canario" en Carrefour). Si ese nombre no está
-  // en el libro, se crea el producto con él.
-  setPrecioEnTienda(ingrediente, tiendaId, nombreProducto, precio) {
+  // el producto ahí ("Plátano canario" en Carrefour) y cómo lo venden (por
+  // kilo o por unidad). Si ese nombre no está en el libro, se crea el
+  // producto con él.
+  setPrecioEnTienda(ingrediente, tiendaId, nombreProducto, precio, { unidad = null, formato = null } = {}) {
     const nombre = String(nombreProducto || '').trim();
     if (!nombre) return null;
-    const producto = this.ensureProducto({ ingrediente, nombre });
+    const producto = this.ensureProducto({ ingrediente, nombre, unidad, formato });
     return this.setPrecio(producto.id, tiendaId, precio);
   },
 
-  // El precio más barato entre los productos del ingrediente
-  mejorPrecio(ingrediente) {
-    let mejor = null;
-    for (const prod of this.getProductosDe(ingrediente)) {
-      for (const p of this.getPreciosDe(prod.id)) {
-        if (!mejor || p.precio < mejor.precio) {
-          mejor = { ...p, producto: prod, nombreProducto: prod.nombre };
-        }
-      }
+  // El precio más barato entre los productos del ingrediente (por lo que se
+  // paga de verdad por la cantidad de la lista).
+  mejorPrecio(ingrediente, item = null) {
+    const ofertas = this.getOfertas(ingrediente, item);
+    if (!ofertas.length) return null;
+    let mejor = ofertas[0];
+    for (const o of ofertas) {
+      if (o.coste < mejor.coste) mejor = o;
     }
-    return mejor;
+    return { ...mejor, producto: mejor.producto, nombreProducto: mejor.nombreProducto };
+  },
+
+  // El más barato con la MISMA base (€/kg): es el que sirve para comparar
+  // entre supermercados. null si las tiendas no lo venden igual.
+  mejorPorKilo(ingrediente, item = null) {
+    const conBase = this.getOfertas(ingrediente, item).filter(o => o.porKilo !== null);
+    if (!conBase.length) return null;
+    return conBase.reduce((a, b) => (b.porKilo < a.porKilo ? b : a));
   },
 
   // ------------------------------------------------------------
@@ -780,16 +861,25 @@ const Shopping = {
         .map(([u, c]) => `${this._fmt(c, c % 1 === 0 ? 0 : 1)} ${this._uLabel(u, c)}`);
       if (item.texto.length) partes.push(item.texto.join(', '));
       const producto = this.getProductosDe(item.nombre)[0] || null;
-      const precio = this.mejorPrecio(item.nombre);
+      const ofertas = this.getOfertas(item.nombre, item);
+      const precio = this.mejorPrecio(item.nombre, item);
+      const mejorKilo = this.mejorPorKilo(item.nombre, item);
+      ofertas.forEach(o => {
+        o.mejorKilo = !!(mejorKilo && o.productoId === mejorKilo.productoId && o.tiendaId === mejorKilo.tiendaId);
+      });
       return {
         ...item,
         cantidad: partes.join(' + '),
         categoria: item.manualCategoria || this._categoria(item.nombre, producto),
         producto,
-        precio: precio ? precio.precio : null,
+        // lo que se paga por la cantidad que pide la lista (prorrateado si
+        // el súper lo vende por kilo)
+        precio: precio ? precio.coste : null,
         tienda: precio ? precio.tienda : null,
+        unidad: precio ? precio.unidad : null,
+        porKilo: precio ? precio.porKilo : null,
         // el precio y el nombre que tiene en cada tienda (issue #2)
-        ofertas: this.getOfertas(item.nombre),
+        ofertas,
         nombreProducto: precio ? precio.nombreProducto : null,
         alternativas: producto ? this.getPreciosDe(producto.id) : [],
         comprado: this.isComprado(item.key),
@@ -860,16 +950,19 @@ const Shopping = {
     });
   },
 
-  // Texto plano para copiar (con precios, tienda y el nombre del producto)
+  // Texto plano para copiar (con precios, tienda, nombre del producto y la
+  // base con la que se comparan: por kilo o por unidad)
   textoLista(items) {
     const lineas = items.map(it => {
       const parts = [`- ${it.nombre}: ${it.cantidad}`];
       if (it.precio !== null) {
         const oferta = it.tienda
-          ? (it.ofertas || []).find(o => o.precio === it.precio && o.tienda.id === it.tienda.id)
+          ? (it.ofertas || []).find(o => o.coste === it.precio && o.tienda.id === it.tienda.id)
           : null;
+        const base = (oferta && oferta.unidad !== 'kg' && oferta.porKilo)
+          ? ` · ${Shopping._fmt(oferta.porKilo)} €/kg` : '';
         parts.push(`(${Shopping._precio(it.precio)}${it.tienda ? ' en ' + it.tienda.nombre : ''}` +
-          `${oferta && oferta.nombreProducto ? ' — ' + oferta.nombreProducto : ''})`);
+          `${oferta && oferta.nombreProducto ? ' — ' + oferta.nombreProducto : ''}${base})`);
       }
       return parts.join(' ');
     });

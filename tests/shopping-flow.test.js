@@ -196,6 +196,53 @@ check('el producto a mano guarda su nombre de tienda y el precio',
   yogur?.nombreProducto === 'Yogur natural Pack 4' && yogur?.precio === 1.2,
   `${yogur?.nombreProducto} ${yogur?.precio}`);
 
+// ------------------------------------------------------------
+// 7) El pimiento: uno por kilo y otro por unidad (bolsa de 500 g)
+// ------------------------------------------------------------
+console.log('\n=== PRECIOS POR KILO Y POR UNIDAD ===');
+Recipes._recipes.push({ id: 'r2', nombre: 'Pimientos al horno', tipoComida: 'cena', tags: [], nutricion: {},
+  ingredientes: [{ nombre: 'Pimiento verde', cantidad: '300', unidad: 'g' }], pasos: [] });
+Menu._menu[Menu.getWeekKey()].tuesday = { lunch: 'r2', dinner: null };
+
+const keyPimiento = Shopping._norm('Pimiento verde');
+
+// Mercadona: por kilo
+App.openPriceModal(keyPimiento);
+document.getElementById('sp-tienda').value = mercadona.id;
+document.getElementById('sp-producto').value = 'Pimiento verde';
+document.getElementById('sp-unidad').value = 'kg';
+document.getElementById('sp-precio').value = '4,50';
+App.savePrice(keyPimiento);
+
+// Carrefour: bolsa de 500 g
+App.openPriceModal(keyPimiento);
+document.getElementById('sp-tienda').value = carrefour.id;
+document.getElementById('sp-producto').value = 'Pimiento verde bolsa 500 g';
+document.getElementById('sp-unidad').value = 'ud';
+document.getElementById('sp-formato').value = '500';
+document.getElementById('sp-precio').value = '1,79';
+App.savePrice(keyPimiento);
+
+App.renderShoppingView();
+const htmlPim = main.innerHTML;
+check('la fila muestra el precio por kilo', htmlPim.includes('€/kg'), '');
+check('y el precio comparable de la bolsa (3,58 €/kg)', htmlPim.includes('3,58 €/kg'), '');
+check('y lo que se paga por los 300 g (1,07 €)', htmlPim.includes('1,07 €'), '');
+check('marca la más barata por kilo', htmlPim.includes('mejor €/kg'), '');
+
+const itemPim = Shopping.buildList().find(i => i.nombre === 'Pimiento verde');
+check('el precio de la fila es lo que se paga (1,07 €)', itemPim?.precio === 1.07, String(itemPim?.precio));
+check('el total estimado lo usa', Shopping.totalEstimado([itemPim]) === 1.07, String(Shopping.totalEstimado([itemPim])));
+
+// al cambiar de tienda se rellena cómo lo venden
+App.openPriceModal(keyPimiento);
+document.getElementById('sp-tienda').value = carrefour.id;
+App.onPriceStoreChange(keyPimiento);
+check('al cambiar de tienda se rellena la unidad', document.getElementById('sp-unidad').value === 'ud',
+  document.getElementById('sp-unidad').value);
+check('y el peso del formato', document.getElementById('sp-formato').value === '500',
+  document.getElementById('sp-formato').value);
+
 const failed = results.filter(r => !r).length;
 console.log(`\n${results.length - failed}/${results.length} tests OK`);
 process.exit(failed ? 1 : 0);
