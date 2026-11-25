@@ -1,3 +1,39 @@
+# PENDING — Sesión del 2026-11-25 (v54)
+
+## Un producto por ingrediente con ofertas por supermercado (issue #10)
+
+El modelo de datos del libro de precios se reorganizó: **un producto = un
+ingrediente del catálogo** ("Salmón", "Pimiento verde"), y debajo de cada
+producto una **tabla de ofertas por supermercado**:
+
+- `productos` → uno solo por ingrediente `{ id, ingrediente, categoria }`.
+- `ofertas` → `{ id, productoId, tiendaId, nombre, precio, unidad, formato }`
+  = "este ingrediente, en esta tienda, con este nombre y así lo venden".
+
+Así "FILET SALMÓ" (Mercadona) y "Salmón" (el catálogo) son la MISMA cosa y el
+ticket queda conciliado con la lista sin crear productos fantasma.
+
+### Cambios
+
+- `js/shopping.js`: `setPrecio` → `setOferta`, `getPreciosDe` → `getOfertasDe`,
+  `ensureProducto({ingrediente, nombre})` → `ensureProducto(ingrediente)`.
+  El ticket guarda contra el **producto del catálogo** (`_ingredienteDe`) y
+  contra la **oferta** de esa tienda (`setOferta`). Migración v1 → v2
+  idempotente con respaldo `v1`.
+- `js/app.js`: el modal 🏷️ edita la **oferta** (nombre, precio, unidad,
+  formato) y el ➕ Producto sigue creando **productos del catálogo**.
+- El **ticket→precio** no crea productos nuevos: resuelve el ingrediente real
+  y actualiza la oferta de la tienda.
+
+### Test nuevo
+
+`tests/shopping.test.js` + `tests/shopping-flow.test.js` actualizados para el
+modelo de un producto por ingrediente con ofertas.
+
+`tests/`: **198 tests OK** en total (7 dragdrop + 9 move-logic + 34 prep +
+11 ai-ticket + 107 shopping + 30 shopping-flow).
+`sw.js`: bump a `menuapp-v54`.
+
 # PENDING — Sesión del 2026-11-25 (v53)
 
 ## Precios por kilo y por unidad, comparables entre supermercados (issue #7)
