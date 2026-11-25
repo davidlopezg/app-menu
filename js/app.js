@@ -1244,7 +1244,7 @@ const App = {
 
     const tiendas = Shopping.getTiendas();
     const ofertas = item.ofertas || [];
-    const productos = Shopping.getProductosDe(item.nombre);
+    const productos = Shopping.getProductos(item.nombre);
     const porTienda = Shopping.datosPorTienda(item.nombre);
 
     // la tienda que se abre: la más barata del producto (o la primera)
@@ -1377,7 +1377,7 @@ const App = {
   },
 
   removePrice(productoId, tiendaId) {
-    Shopping.removePrecio(productoId, tiendaId);
+    Shopping.removeOferta(productoId, tiendaId);
     Components.modal.close();
     this.renderShoppingView();
   },
@@ -1672,7 +1672,7 @@ const App = {
       // cada producto con las tiendas donde ya se sabe su precio (el mismo
       // producto se llama distinto en cada tienda)
       productos: Shopping.getProductos().map(p => {
-        const tiendas = Shopping.getPreciosDe(p.id).map(x => x.tienda.nombre);
+        const tiendas = Shopping.getOfertasDe(p.id).map(x => x.tienda.nombre);
         return `${p.nombre} [${Shopping._labelDe(p.ingrediente)}]${tiendas.length ? ' @ ' + tiendas.join(', ') : ''}`;
       }),
     };
@@ -1809,7 +1809,7 @@ const App = {
     if (!tiendaId) { box.innerHTML = ''; return; }
     const tienda = Shopping.getTienda(tiendaId);
     const nombres = Shopping.getProductos()
-      .filter(p => Shopping.getPreciosDe(p.id).some(x => x.tiendaId === tiendaId))
+      .filter(p => Shopping.getOfertasDe(p.id).some(x => x.tiendaId === tiendaId))
       .map(p => `${p.nombre} (${Shopping._labelDe(p.ingrediente)})`);
     box.innerHTML = nombres.length
       ? `En ${Components.escapeHtml(tienda.nombre)} ya tenés: ${nombres.map(n => Components.escapeHtml(n)).join(' · ')}`

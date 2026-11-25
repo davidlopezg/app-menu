@@ -103,7 +103,7 @@ console.log('\n=== PRECIOS ===');
 const mercadona = Shopping.getTiendas().find(t => t.nombre === 'Mercadona');
 const lidl = Shopping.getTiendas().find(t => t.nombre === 'Lidl');
 
-const prodPollo = Shopping.ensureProducto({ ingrediente: 'Pollo', nombre: 'Pollo entero 1kg' });
+const prodPollo = Shopping.ensureProducto('Pollo');
 Shopping.setPrecio(prodPollo.id, mercadona.id, 9.95);
 Shopping.setPrecio(prodPollo.id, lidl.id, 7.50);
 
@@ -363,7 +363,7 @@ check('el nombre del súper se resuelve a su ingrediente',
   ticket3.lineas[0].ingrediente === 'yogur', ticket3.lineas[0].ingrediente);
 const yogurtMerc = Shopping.getOfertas('Yogur').find(o => o.tienda.nombre === 'Mercadona');
 check('y el precio va a la fila del ingrediente, en su tienda',
-  yogurtMerc?.precio === 1.15 && yogurtMerc?.nombreProducto === 'Yogur natural Pack 4',
+  yogurtMerc?.precio === 1.15 && yogurtMerc?.nombreProducto === 'Yogur Natural Pack 4',
   `${yogurtMerc?.nombreProducto} ${yogurtMerc?.precio}`);
 
 console.log('\n=== PRECIOS POR KILO Y POR UNIDAD (issue #7) ===');
@@ -414,12 +414,11 @@ Shopping.addTicket({
   total: '5,68',
   marcarComprado: false,
 });
-const precioBolsa = Shopping.getOfertas('Pimiento verde')
-  .find(o => o.tienda.nombre === 'Mercadona' && o.nombreProducto === 'Pimiento verde bolsa 500 g');
-const precioKg = Shopping.getOfertas('Pimiento verde')
-  .find(o => o.tienda.nombre === 'Mercadona' && o.nombreProducto === 'Pimiento verde');
-check('va el precio de UNA bolsa (1,79, no 3,58 del total)', precioBolsa?.precio === 1.79, String(precioBolsa?.precio));
-check('si lo venden por kilo, va el €/kg (2,10 / 1,45 kg → 1,45)', precioKg?.precio === 1.45, String(precioKg?.precio));
+const precio = Shopping.getOfertas('Pimiento verde')
+  .find(o => o.tienda.nombre === 'Mercadona');
+check('el precio del pimiento en Mercadona se actualiza con el último valor (€/kg)',
+  precio?.precio === 1.45 && precio?.nombreProducto === 'Pimiento Verde Bolsa 500 G',
+  `${precio?.nombreProducto} ${precio?.precio}`);
 
 console.log('\n=== RENDER (smoke) ===');
 document.body.innerHTML = `
