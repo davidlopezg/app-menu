@@ -342,6 +342,30 @@ check('la tienda que no lo tenía recibe su propia entrada con el nombre del tic
   lecheLidl?.nombreProducto === 'Leche Desnatada 1l' && lecheLidl?.precio === 0.95,
   `${lecheLidl?.nombreProducto} ${lecheLidl?.precio}`);
 
+// un producto a mano con el nombre que tiene en esa tienda
+Shopping.addManual({ nombre: 'Yogur', cantidad: '4 ud', precio: '1,20', tiendaId: carrefour.id, nombreTienda: 'Yogur natural Pack 4' });
+const yogurt = Shopping.getOfertas('Yogur').find(o => o.tienda.nombre === 'Carrefour');
+check('el producto a mano guarda el nombre de la tienda',
+  yogurt?.nombreProducto === 'Yogur natural Pack 4' && yogurt?.precio === 1.2,
+  `${yogurt?.nombreProducto} ${yogurt?.precio}`);
+
+// en el ticket, si el usuario escribe el NOMBRE del súper como producto,
+// el ingrediente se resuelve al del catálogo (el precio llega a la fila)
+const ticket3 = Shopping.addTicket({
+  fecha: '2026-11-25',
+  tiendaId: mercadona3.id,
+  tiendaNombre: 'Mercadona',
+  lineas: [{ descripcion: 'YOGUR NATURAL PACK 4', cantidad: '1', precioTotal: '1,15', ingrediente: 'Yogur natural Pack 4', precioGuardado: true }],
+  total: '1,15',
+  marcarComprado: false,
+});
+check('el nombre del súper se resuelve a su ingrediente',
+  ticket3.lineas[0].ingrediente === 'yogur', ticket3.lineas[0].ingrediente);
+const yogurtMerc = Shopping.getOfertas('Yogur').find(o => o.tienda.nombre === 'Mercadona');
+check('y el precio va a la fila del ingrediente, en su tienda',
+  yogurtMerc?.precio === 1.15 && yogurtMerc?.nombreProducto === 'Yogur natural Pack 4',
+  `${yogurtMerc?.nombreProducto} ${yogurtMerc?.precio}`);
+
 console.log('\n=== RENDER (smoke) ===');
 document.body.innerHTML = `
   <header><button id="btn-back"></button><h1 id="header-title"></h1><button id="btn-menu"></button></header>

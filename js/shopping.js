@@ -377,6 +377,9 @@ const Shopping = {
     // 1) el precio del ticket va al libro de precios (producto + tienda)
     for (const l of ticket.lineas) {
       if (!l.precioGuardado || !l.ingrediente || !ticket.tiendaId || l.precioTotal === null) continue;
+      // si escribió el nombre del producto del súper ("Plátano canario"),
+      // el ingrediente real es el del catálogo ("Plátano")
+      l.ingrediente = this._ingredienteDe(l.ingrediente);
       if (!l.productoId) {
         // el producto del libro: el que se llama como dice el ticket, o el
         // que ya tiene precio en esa tienda, o uno nuevo con el nombre del
@@ -414,6 +417,23 @@ const Shopping = {
       .toLowerCase()
       .replace(/\b[a-záéíóúñ]/g, c => c.toUpperCase())
       .replace(/\b(de|del|la|el|los|las|y|con)\b/g, m => m.toLowerCase());
+  },
+
+  // Si lo que escribió el usuario es el NOMBRE de un producto del libro
+  // ("Plátano canario"), el ingrediente real es el de ese producto
+  // ("plátano") → así el precio le llega a la fila de la lista de la compra.
+  _ingredienteDe(nombre) {
+    const n = this._norm(nombre);
+    if (!n) return nombre;
+    const prods = this._data.productos;
+    let prod = prods.find(p => this._norm(p.nombre) === n);
+    if (!prod) {
+      prod = prods.find(p => {
+        const pn = this._norm(p.nombre);
+        return pn && (n.includes(pn) || pn.includes(n));
+      });
+    }
+    return prod ? this._canon(prod.ingrediente) : nombre;
   },
 
   // Qué producto del libro es el de esta línea del ticket:
@@ -531,7 +551,7 @@ const Shopping = {
     return this._data.extras[weekKey];
   },
 
-  addManual({ nombre, cantidad = '', categoria = '', precio = null, tiendaId = null }) {
+  addManual({ nombre, cantidad = '', categoria = '', precio = null, tiendaId = null, nombreTienda = '' }) {
     const n = (nombre || '').trim();
     if (!n) return null;
     const item = {
@@ -542,8 +562,10 @@ const Shopping = {
     };
     this._extras().items.push(item);
     // si viene con precio, se guarda en el libro → total y reparto funcionan
-    if (tiendaId && precio !== null && precio !== '' && !isNaN(parseFloat(precio))) {
-      const producto = this.ensureProducto({ ingrediente: n, nombre: n });
+    if (tiendaId && this._num(precio) !== null) {
+      // el nombre en esa tienda (si no, el mismo nombre del producto)
+      const nombreProd = String(nombreTienda || '').trim() || n;
+      const producto = this.ensureProducto({ ingrediente: n, nombre: nombreProd });
       this.setPrecio(producto.id, tiendaId, precio);
     }
     this._save();
@@ -578,8 +600,10 @@ const Shopping = {
   // Precios
   // ------------------------------------------------------------
   setPrecio(productoId, tiendaId, precio) {
-    const valor = Math.round(parseFloat(precio) * 100) / 100;
-    if (!productoId || !tiendaId || isNaN(valor)) return null;
+    // acepta "1,99" (coma) y "1.99" (punto)
+    const n = this._num(precio);
+    if (!productoId || !tiendaId || n === null) return null;
+    const valor = Math.round(n * 100) / 100;
     let p = this._data.precios.find(x => x.productoId === productoId && x.tiendaId === tiendaId);
     if (!p) {
       p = { id: Store.uuid(), productoId, tiendaId, precio: valor, actualizado_at: new Date().toISOString() };

@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v51 (2026-11-25)',
+  VERSION: 'v52 (2026-11-25)',
 
   // ============================================
   // Initialize
@@ -1130,14 +1130,18 @@ const App = {
       </select>
 
       <label style="font-size: 13px; color: var(--color-text-muted);">Precio (€) — opcional</label>
-      <input type="number" id="ap-precio" class="form-input" step="0.01" min="0" inputmode="decimal"
+      <input type="text" id="ap-precio" class="form-input" inputmode="decimal"
              placeholder="0,00" style="margin-bottom: 12px;">
 
       <label style="font-size: 13px; color: var(--color-text-muted);">Tienda — opcional</label>
-      <select id="ap-tienda" class="form-input" style="margin-bottom: 16px;">
+      <select id="ap-tienda" class="form-input" style="margin-bottom: 12px;">
         ${tiendas.map(t => `<option value="${t.id}">${Components.escapeHtml(t.nombre)}</option>`).join('')}
         <option value="">— sin tienda —</option>
       </select>
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Nombre en esa tienda — opcional</label>
+      <input type="text" id="ap-nombre-tienda" class="form-input"
+             placeholder="Ej: Plátano de Canarias extra" style="margin-bottom: 16px;">
 
       <div style="display: flex; gap: 8px;">
         <button class="btn btn--primary" style="flex: 1;" onclick="App.saveShoppingProduct()">Añadir</button>
@@ -1153,10 +1157,12 @@ const App = {
     const categoria = document.getElementById('ap-categoria')?.value || '';
     const precio = document.getElementById('ap-precio')?.value;
     const tiendaId = document.getElementById('ap-tienda')?.value || null;
+    const nombreTienda = document.getElementById('ap-nombre-tienda')?.value.trim() || '';
+    const valor = Shopping._num(precio);
 
-    Shopping.addManual({ nombre, cantidad, categoria, precio, tiendaId });
+    Shopping.addManual({ nombre, cantidad, categoria, precio: valor, tiendaId, nombreTienda });
     Components.modal.close();
-    if (precio !== '' && !tiendaId) {
+    if (valor !== null && !tiendaId) {
       Components.toast.show('⚠️ El precio necesita una tienda: no se guardó');
     } else {
       Components.toast.show(`✅ ${nombre} añadido a la lista`);
@@ -1249,8 +1255,8 @@ const App = {
       </p>
 
       <label style="font-size: 13px; color: var(--color-text-muted);">Precio (€)</label>
-      <input type="number" id="sp-precio" class="form-input" step="0.01" min="0"
-             inputmode="decimal" placeholder="0,00" style="margin-bottom: 16px;">
+      <input type="text" id="sp-precio" class="form-input" inputmode="decimal"
+             placeholder="0,00" style="margin-bottom: 16px;">
 
       ${listaPrecios}
 
@@ -1279,15 +1285,16 @@ const App = {
     const tiendaId = document.getElementById('sp-tienda')?.value;
     const nombre = document.getElementById('sp-producto')?.value.trim();
     const precio = document.getElementById('sp-precio')?.value;
+    const valor = Shopping._num(precio);
 
-    if (!item || !tiendaId || !nombre || !precio) {
+    if (!item || !tiendaId || !nombre || valor === null) {
       Components.toast.show('⚠️ Completá tienda, producto y precio');
       return;
     }
 
-    Shopping.setPrecioEnTienda(item.nombre, tiendaId, nombre, precio);
+    Shopping.setPrecioEnTienda(item.nombre, tiendaId, nombre, valor);
     Components.modal.close();
-    Components.toast.show(`✅ ${Shopping._precio(precio)} en ${Shopping.getTienda(tiendaId).nombre}`);
+    Components.toast.show(`✅ ${Shopping._precio(valor)} en ${Shopping.getTienda(tiendaId).nombre}`);
     this.renderShoppingView();
   },
 
@@ -1699,7 +1706,7 @@ const App = {
 
       <div style="display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap;">
         <label style="font-size:13px;color:var(--color-text-muted);">Total</label>
-        <input type="number" id="tk-total" class="form-input" step="0.01" inputmode="decimal"
+        <input type="text" id="tk-total" class="form-input" inputmode="decimal"
                value="${data.total}" style="width:96px;">
         <label style="font-size:13px;color:var(--color-text-muted);display:flex;align-items:center;gap:6px;">
           <input type="checkbox" id="tk-marcar" checked> Marcar comprado en la lista
@@ -1793,7 +1800,7 @@ const App = {
         placeholder="Patatas 1kg | 1 | 1,29&#10;Leche | 2 | 1,10&#10;Aceite de oliva | 1 | 6,50"></textarea>
 
       <label style="font-size: 13px; color: var(--color-text-muted); margin-top:12px;">Total (opcional)</label>
-      <input type="number" id="tm-total" class="form-input" step="0.01" inputmode="decimal"
+      <input type="text" id="tm-total" class="form-input" inputmode="decimal"
              style="margin-bottom:12px;">
 
       <label style="font-size:13px;color:var(--color-text-muted);display:flex;align-items:center;gap:6px;margin-bottom:16px;">

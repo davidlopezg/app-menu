@@ -1,3 +1,33 @@
+# PENDING — Sesión del 2026-11-25 (v52)
+
+## El precio con coma decimal no se guardaba (issue #2, segunda vuelta)
+
+La v51 enseñaba las ofertas por tienda, pero al **probar el flujo real** (no
+solo los tests de datos) salieron dos cosas:
+
+- **El input de precio era `type="number"`** → en Chrome/Safari "1,99" (coma
+  decimal, como escribe la gente en España) es un número inválido → el campo
+  queda vacío y **el precio no se guardaba nunca** (salía el aviso
+  "⚠️ Completá tienda, producto y precio"). Ahora los precios se escriben en
+  un campo de texto con `inputmode="decimal"` y el código acepta coma y punto.
+  Afectaba al modal 🏷️, al botón ➕ Producto y al total del ticket.
+- **Si en el ticket escribías el nombre del súper** ("Plátano canario") en
+  vez del ingrediente ("Plátano"), el precio se guardaba en una fila que no
+  era de la lista → no se conciliaba. Ahora el nombre del producto se
+  resuelve a su ingrediente del catálogo.
+- El **➕ Producto** ahora tiene **"Nombre en esa tienda"**: un producto que
+  no sale de las recetas también puede llamarse distinto en cada súper.
+
+### Test nuevo de punta a punta
+
+`tests/shopping-flow.test.js`: carga el `index.html` real en jsdom (mismos
+ids que la app) y **maneja la interfaz como el usuario**: abrir el modal,
+cambiar de tienda, escribir el nombre, guardar el precio, ver la lista, el
+reparto por tienda, el texto copiado y el ticket. 22 tests.
+
+`tests/`: 179 tests OK en total (7 dragdrop + 9 move-logic + 34 prep +
+11 ai-ticket + 96 shopping + 22 shopping-flow).
+
 # PENDING — Sesión del 2026-11-25 (v51)
 
 ## El producto con el nombre de cada tienda (issue #2)

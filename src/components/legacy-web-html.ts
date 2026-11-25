@@ -6963,6 +6963,9 @@ const Shopping = {
     // 1) el precio del ticket va al libro de precios (producto + tienda)
     for (const l of ticket.lineas) {
       if (!l.precioGuardado || !l.ingrediente || !ticket.tiendaId || l.precioTotal === null) continue;
+      // si escribió el nombre del producto del súper ("Plátano canario"),
+      // el ingrediente real es el del catálogo ("Plátano")
+      l.ingrediente = this._ingredienteDe(l.ingrediente);
       if (!l.productoId) {
         // el producto del libro: el que se llama como dice el ticket, o el
         // que ya tiene precio en esa tienda, o uno nuevo con el nombre del
@@ -7000,6 +7003,23 @@ const Shopping = {
       .toLowerCase()
       .replace(/\b[a-záéíóúñ]/g, c => c.toUpperCase())
       .replace(/\b(de|del|la|el|los|las|y|con)\b/g, m => m.toLowerCase());
+  },
+
+  // Si lo que escribió el usuario es el NOMBRE de un producto del libro
+  // ("Plátano canario"), el ingrediente real es el de ese producto
+  // ("plátano") → así el precio le llega a la fila de la lista de la compra.
+  _ingredienteDe(nombre) {
+    const n = this._norm(nombre);
+    if (!n) return nombre;
+    const prods = this._data.productos;
+    let prod = prods.find(p => this._norm(p.nombre) === n);
+    if (!prod) {
+      prod = prods.find(p => {
+        const pn = this._norm(p.nombre);
+        return pn && (n.includes(pn) || pn.includes(n));
+      });
+    }
+    return prod ? this._canon(prod.ingrediente) : nombre;
   },
 
   // Qué producto del libro es el de esta línea del ticket:
@@ -7117,7 +7137,7 @@ const Shopping = {
     return this._data.extras[weekKey];
   },
 
-  addManual({ nombre, cantidad = '', categoria = '', precio = null, tiendaId = null }) {
+  addManual({ nombre, cantidad = '', categoria = '', precio = null, tiendaId = null, nombreTienda = '' }) {
     const n = (nombre || '').trim();
     if (!n) return null;
     const item = {
@@ -7128,8 +7148,10 @@ const Shopping = {
     };
     this._extras().items.push(item);
     // si viene con precio, se guarda en el libro → total y reparto funcionan
-    if (tiendaId && precio !== null && precio !== '' && !isNaN(parseFloat(precio))) {
-      const producto = this.ensureProducto({ ingrediente: n, nombre: n });
+    if (tiendaId && this._num(precio) !== null) {
+      // el nombre en esa tienda (si no, el mismo nombre del producto)
+      const nombreProd = String(nombreTienda || '').trim() || n;
+      const producto = this.ensureProducto({ ingrediente: n, nombre: nombreProd });
       this.setPrecio(producto.id, tiendaId, precio);
     }
     this._save();
@@ -7164,8 +7186,10 @@ const Shopping = {
   // Precios
   // ------------------------------------------------------------
   setPrecio(productoId, tiendaId, precio) {
-    const valor = Math.round(parseFloat(precio) * 100) / 100;
-    if (!productoId || !tiendaId || isNaN(valor)) return null;
+    // acepta "1,99" (coma) y "1.99" (punto)
+    const n = this._num(precio);
+    if (!productoId || !tiendaId || n === null) return null;
+    const valor = Math.round(n * 100) / 100;
     let p = this._data.precios.find(x => x.productoId === productoId && x.tiendaId === tiendaId);
     if (!p) {
       p = { id: Store.uuid(), productoId, tiendaId, precio: valor, actualizado_at: new Date().toISOString() };
@@ -8085,7 +8109,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v51 (2026-11-25)',
+  VERSION: 'v52 (2026-11-25)',
 
   // ============================================
   // Initialize
@@ -9206,14 +9230,18 @@ const App = {
       </select>
 
       <label style="font-size: 13px; color: var(--color-text-muted);">Precio (€) — opcional</label>
-      <input type="number" id="ap-precio" class="form-input" step="0.01" min="0" inputmode="decimal"
+      <input type="text" id="ap-precio" class="form-input" inputmode="decimal"
              placeholder="0,00" style="margin-bottom: 12px;">
 
       <label style="font-size: 13px; color: var(--color-text-muted);">Tienda — opcional</label>
-      <select id="ap-tienda" class="form-input" style="margin-bottom: 16px;">
+      <select id="ap-tienda" class="form-input" style="margin-bottom: 12px;">
         \${tiendas.map(t => \`<option value="\${t.id}">\${Components.escapeHtml(t.nombre)}</option>\`).join('')}
         <option value="">— sin tienda —</option>
       </select>
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Nombre en esa tienda — opcional</label>
+      <input type="text" id="ap-nombre-tienda" class="form-input"
+             placeholder="Ej: Plátano de Canarias extra" style="margin-bottom: 16px;">
 
       <div style="display: flex; gap: 8px;">
         <button class="btn btn--primary" style="flex: 1;" onclick="App.saveShoppingProduct()">Añadir</button>
@@ -9229,10 +9257,12 @@ const App = {
     const categoria = document.getElementById('ap-categoria')?.value || '';
     const precio = document.getElementById('ap-precio')?.value;
     const tiendaId = document.getElementById('ap-tienda')?.value || null;
+    const nombreTienda = document.getElementById('ap-nombre-tienda')?.value.trim() || '';
+    const valor = Shopping._num(precio);
 
-    Shopping.addManual({ nombre, cantidad, categoria, precio, tiendaId });
+    Shopping.addManual({ nombre, cantidad, categoria, precio: valor, tiendaId, nombreTienda });
     Components.modal.close();
-    if (precio !== '' && !tiendaId) {
+    if (valor !== null && !tiendaId) {
       Components.toast.show('⚠️ El precio necesita una tienda: no se guardó');
     } else {
       Components.toast.show(\`✅ \${nombre} añadido a la lista\`);
@@ -9325,8 +9355,8 @@ const App = {
       </p>
 
       <label style="font-size: 13px; color: var(--color-text-muted);">Precio (€)</label>
-      <input type="number" id="sp-precio" class="form-input" step="0.01" min="0"
-             inputmode="decimal" placeholder="0,00" style="margin-bottom: 16px;">
+      <input type="text" id="sp-precio" class="form-input" inputmode="decimal"
+             placeholder="0,00" style="margin-bottom: 16px;">
 
       \${listaPrecios}
 
@@ -9355,15 +9385,16 @@ const App = {
     const tiendaId = document.getElementById('sp-tienda')?.value;
     const nombre = document.getElementById('sp-producto')?.value.trim();
     const precio = document.getElementById('sp-precio')?.value;
+    const valor = Shopping._num(precio);
 
-    if (!item || !tiendaId || !nombre || !precio) {
+    if (!item || !tiendaId || !nombre || valor === null) {
       Components.toast.show('⚠️ Completá tienda, producto y precio');
       return;
     }
 
-    Shopping.setPrecioEnTienda(item.nombre, tiendaId, nombre, precio);
+    Shopping.setPrecioEnTienda(item.nombre, tiendaId, nombre, valor);
     Components.modal.close();
-    Components.toast.show(\`✅ \${Shopping._precio(precio)} en \${Shopping.getTienda(tiendaId).nombre}\`);
+    Components.toast.show(\`✅ \${Shopping._precio(valor)} en \${Shopping.getTienda(tiendaId).nombre}\`);
     this.renderShoppingView();
   },
 
@@ -9775,7 +9806,7 @@ const App = {
 
       <div style="display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap;">
         <label style="font-size:13px;color:var(--color-text-muted);">Total</label>
-        <input type="number" id="tk-total" class="form-input" step="0.01" inputmode="decimal"
+        <input type="text" id="tk-total" class="form-input" inputmode="decimal"
                value="\${data.total}" style="width:96px;">
         <label style="font-size:13px;color:var(--color-text-muted);display:flex;align-items:center;gap:6px;">
           <input type="checkbox" id="tk-marcar" checked> Marcar comprado en la lista
@@ -9869,7 +9900,7 @@ const App = {
         placeholder="Patatas 1kg | 1 | 1,29&#10;Leche | 2 | 1,10&#10;Aceite de oliva | 1 | 6,50"></textarea>
 
       <label style="font-size: 13px; color: var(--color-text-muted); margin-top:12px;">Total (opcional)</label>
-      <input type="number" id="tm-total" class="form-input" step="0.01" inputmode="decimal"
+      <input type="text" id="tm-total" class="form-input" inputmode="decimal"
              style="margin-bottom:12px;">
 
       <label style="font-size:13px;color:var(--color-text-muted);display:flex;align-items:center;gap:6px;margin-bottom:16px;">
