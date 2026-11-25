@@ -401,6 +401,26 @@ check('el texto copiado lleva la base comparable',
 check('los productos sin unidad no se comparan por kilo',
   Shopping.mejorPorKilo('Pollo', { cantidades: { kg: 1 } }) === null);
 
+console.log('\n=== DEL TICKET AL LIBRO: EL PRECIO DE UNA UNIDAD ===');
+// una línea con 2 bolsas (1,79 € cada una) y otra de 1,45 kg (2,10 €)
+Shopping.addTicket({
+  fecha: '2026-11-25',
+  tiendaId: mercadona3.id,
+  tiendaNombre: 'Mercadona',
+  lineas: [
+    { descripcion: 'PIMIENTO VERDE BOLSA 500 G', cantidad: '2', precioUnit: '1,79', precioTotal: '3,58', ingrediente: 'Pimiento verde', precioGuardado: true },
+    { descripcion: 'PIMIENTO VERDE A KG', cantidad: '1,45', precioTotal: '2,10', ingrediente: 'Pimiento verde', precioGuardado: true },
+  ],
+  total: '5,68',
+  marcarComprado: false,
+});
+const precioBolsa = Shopping.getOfertas('Pimiento verde')
+  .find(o => o.tienda.nombre === 'Mercadona' && o.nombreProducto === 'Pimiento verde bolsa 500 g');
+const precioKg = Shopping.getOfertas('Pimiento verde')
+  .find(o => o.tienda.nombre === 'Mercadona' && o.nombreProducto === 'Pimiento verde');
+check('va el precio de UNA bolsa (1,79, no 3,58 del total)', precioBolsa?.precio === 1.79, String(precioBolsa?.precio));
+check('si lo venden por kilo, va el €/kg (2,10 / 1,45 kg → 1,45)', precioKg?.precio === 1.45, String(precioKg?.precio));
+
 console.log('\n=== RENDER (smoke) ===');
 document.body.innerHTML = `
   <header><button id="btn-back"></button><h1 id="header-title"></h1><button id="btn-menu"></button></header>
