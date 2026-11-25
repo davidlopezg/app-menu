@@ -1,5 +1,11 @@
 # PENDING — Sesión del 2026-11-25 (v52)
 
+## Cierre del ciclo ux-audit
+
+Los dos issues del ciclo (el #2 y el #5) se resolvieron con PR y se
+fusionaron. `docs/lecciones.md` deja el resultado del ciclo versionado (lo
+genera `feedback.mjs --to docs/lecciones.md`).
+
 ## El precio con coma decimal no se guardaba (issue #2, segunda vuelta)
 
 La v51 enseñaba las ofertas por tienda, pero al **probar el flujo real** (no
