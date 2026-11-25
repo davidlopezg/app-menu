@@ -2068,6 +2068,18 @@ select.form-input {
   opacity: 0.8;
 }
 
+/* la base comparable entre tiendas (€/kg) */
+.shop-oferta__kg {
+  opacity: 0.75;
+  color: var(--color-text-muted);
+}
+
+/* lo que se paga por la cantidad que pide la lista (prorrateado) */
+.shop-oferta__prorrateado {
+  opacity: 0.75;
+  font-style: italic;
+}
+
 /* nombre del producto en la fila del modal de precios */
 .shop-prices__name {
   flex: 1;

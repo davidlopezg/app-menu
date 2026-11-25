@@ -366,6 +366,41 @@ check('y el precio va a la fila del ingrediente, en su tienda',
   yogurtMerc?.precio === 1.15 && yogurtMerc?.nombreProducto === 'Yogur natural Pack 4',
   `${yogurtMerc?.nombreProducto} ${yogurtMerc?.precio}`);
 
+console.log('\n=== PRECIOS POR KILO Y POR UNIDAD (issue #7) ===');
+// El pimiento: Mercadona lo vende POR KILO (4,50 €/kg) y Carrefour en bolsa
+// de 500 g (1,79 €). La lista pide 300 g → hay que comparar con la misma base.
+Shopping.addManual({ nombre: 'Pimiento verde', cantidad: '300 g' });
+Shopping.setPrecioEnTienda('Pimiento verde', mercadona3.id, 'Pimiento verde', 4.50, { unidad: 'kg' });
+Shopping.setPrecioEnTienda('Pimiento verde', carrefour.id, 'Pimiento verde bolsa 500 g', 1.79, { unidad: 'ud', formato: '500 g' });
+
+const pedido = { cantidades: { g: 300 } };
+const ofPim = Shopping.getOfertas('Pimiento verde', pedido);
+const ofPimMerc = ofPim.find(o => o.tienda.nombre === 'Mercadona');
+const ofPimCar = ofPim.find(o => o.tienda.nombre === 'Carrefour');
+check('la oferta por kilo se prorratea a los 300 g (4,50 → 1,35 €)', ofPimMerc?.coste === 1.35, String(ofPimMerc?.coste));
+check('la bolsa de 500 g también se prorratea (1,79 → 1,07 €)', ofPimCar?.coste === 1.07, String(ofPimCar?.coste));
+check('la bolsa se pasa a €/kg para comparar (1,79 / 500 g → 3,58 €/kg)', ofPimCar?.porKilo === 3.58, String(ofPimCar?.porKilo));
+check('el precio por kilo se queda en €/kg (4,50)', ofPimMerc?.porKilo === 4.50, String(ofPimMerc?.porKilo));
+check('la más barata por kilo es la bolsa de Carrefour (3,58 < 4,50)',
+  Shopping.mejorPorKilo('Pimiento verde', pedido)?.tienda.nombre === 'Carrefour',
+  String(Shopping.mejorPorKilo('Pimiento verde', pedido)?.precio));
+
+const itemsP = Shopping.buildList();
+const pimiento = itemsP.find(i => i.nombre === 'Pimiento verde');
+check('la fila usa lo que se paga de verdad (1,07 €)', pimiento?.precio === 1.07, String(pimiento?.precio));
+check('la fila marca la más barata por kilo',
+  pimiento?.ofertas?.find(o => o.tienda.nombre === 'Carrefour')?.mejorKilo === true);
+check('el total estimado suma el importe prorateado',
+  Shopping.totalEstimado(itemsP.filter(i => i.nombre === 'Pimiento verde')) === 1.07,
+  String(Shopping.totalEstimado(itemsP.filter(i => i.nombre === 'Pimiento verde'))));
+check('el texto copiado lleva la base comparable',
+  Shopping.textoLista(itemsP.filter(i => i.nombre === 'Pimiento verde')).includes('€/kg'),
+  Shopping.textoLista(itemsP.filter(i => i.nombre === 'Pimiento verde')));
+
+// lo que ya estaba guardado (sin unidad) sigue igual: sin base comparable
+check('los productos sin unidad no se comparan por kilo',
+  Shopping.mejorPorKilo('Pollo', { cantidades: { kg: 1 } }) === null);
+
 console.log('\n=== RENDER (smoke) ===');
 document.body.innerHTML = `
   <header><button id="btn-back"></button><h1 id="header-title"></h1><button id="btn-menu"></button></header>

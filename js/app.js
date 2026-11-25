@@ -9,7 +9,7 @@ const App = {
 
   // Version visible en el footer. Cambiá este string cada vez que hagas
   // commit+push para poder verificar si el celular esta sincronizado.
-  VERSION: 'v52 (2026-11-25)',
+  VERSION: 'v53 (2026-11-25)',
 
   // ============================================
   // Initialize
@@ -1078,23 +1078,45 @@ const App = {
   },
 
   // El precio de este producto en cada tienda, con el nombre que tiene ahí
-  // ("Plátano de Canarias" en Mercadona, "Plátano canario" en Carrefour).
+  // ("Plátano de Canarias" en Mercadona, "Plátano canario" en Carrefour) y con
+  // la base con la que se comparan (€/kg o €/unidad).
   _ofertasHtml(it) {
     const ofertas = it.ofertas || [];
     if (!ofertas.length) return '';
     return `
       <div class="shop-ofertas">
         ${ofertas.map(o => {
-          const esMejor = it.precio !== null && o.precio === it.precio;
+          const esMejor = it.precio !== null && o.coste === it.precio && o.tienda.id === it.tienda?.id;
+          const badge = o.mejorKilo ? '💰 mejor €/kg' : (esMejor ? '💰 mejor' : '');
           return `
-          <div class="shop-oferta ${esMejor ? 'shop-oferta--best' : ''}">
+          <div class="shop-oferta ${badge ? 'shop-oferta--best' : ''}">
             <span class="shop-oferta__shop">🏪 ${Components.escapeHtml(o.tienda.nombre)}</span>
             <span class="shop-oferta__name">${Components.escapeHtml(o.nombreProducto)}</span>
-            <span class="shop-oferta__price">${Shopping._precio(o.precio)}</span>
-            ${esMejor ? '<span class="shop-oferta__best">💰 mejor</span>' : ''}
+            <span class="shop-oferta__price">${this._precioOferta(o)}</span>
+            ${badge ? `<span class="shop-oferta__best">${badge}</span>` : ''}
           </div>`;
         }).join('')}
       </div>`;
+  },
+
+  // "4,50 €/kg → 1,35 € (300 g)" · "1,79 € / 500 g · 3,58 €/kg"
+  _precioOferta(o) {
+    let html = '';
+    if (o.unidad === 'kg') html += `${Shopping._precio(o.precio)} €/kg`;
+    else if (o.unidad === 'l') html += `${Shopping._precio(o.precio)} €/l`;
+    else {
+      html += Shopping._precio(o.precio);
+      if (o.formato) html += ` / ${o.formato} g`;
+    }
+    // la base comparable (solo si el súper no lo vende ya por kilo)
+    if (o.porKilo && o.unidad !== 'kg' && o.unidad !== 'l') {
+      html += ` <span class="shop-oferta__kg">· ${Shopping._fmt(o.porKilo)} €/kg</span>`;
+    }
+    // lo que se paga por la cantidad que pide la lista
+    if (o.gramos && Math.abs(o.coste - o.precio) > 0.005) {
+      html += ` <span class="shop-oferta__prorrateado">→ ${Shopping._precio(o.coste)} (${o.gramos} g)</span>`;
+    }
+    return html;
   },
 
   // El nombre que tiene el producto en una tienda concreta (si lo hay)
@@ -1141,7 +1163,18 @@ const App = {
 
       <label style="font-size: 13px; color: var(--color-text-muted);">Nombre en esa tienda — opcional</label>
       <input type="text" id="ap-nombre-tienda" class="form-input"
-             placeholder="Ej: Plátano de Canarias extra" style="margin-bottom: 16px;">
+             placeholder="Ej: Plátano de Canarias extra" style="margin-bottom: 12px;">
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Cómo lo venden en esa tienda</label>
+      <select id="ap-unidad" class="form-input" style="margin-bottom: 12px;">
+        <option value="ud">Por unidad o por formato (€ la bolsa, la pieza…)</option>
+        <option value="kg">Por kilo (€/kg)</option>
+        <option value="l">Por litro (€/l)</option>
+      </select>
+
+      <label style="font-size: 13px; color: var(--color-text-muted);">Peso del formato (g) — opcional</label>
+      <input type="text" id="ap-formato" class="form-input" inputmode="numeric"
+             placeholder="Ej: 500" style="margin-bottom: 16px;">
 
       <div style="display: flex; gap: 8px;">
         <button class="btn btn--primary" style="flex: 1;" onclick="App.saveShoppingProduct()">Añadir</button>
@@ -1158,9 +1191,11 @@ const App = {
     const precio = document.getElementById('ap-precio')?.value;
     const tiendaId = document.getElementById('ap-tienda')?.value || null;
     const nombreTienda = document.getElementById('ap-nombre-tienda')?.value.trim() || '';
+    const unidad = document.getElementById('ap-unidad')?.value || 'ud';
+    const formato = document.getElementById('ap-formato')?.value;
     const valor = Shopping._num(precio);
 
-    Shopping.addManual({ nombre, cantidad, categoria, precio: valor, tiendaId, nombreTienda });
+    Shopping.addManual({ nombre, cantidad, categoria, precio: valor, tiendaId, nombreTienda, unidad, formato });
     Components.modal.close();
     if (valor !== null && !tiendaId) {
       Components.toast.show('⚠️ El precio necesita una tienda: no se guardó');
@@ -1210,11 +1245,14 @@ const App = {
     const tiendas = Shopping.getTiendas();
     const ofertas = item.ofertas || [];
     const productos = Shopping.getProductosDe(item.nombre);
-    const porTienda = Shopping.nombresPorTienda(item.nombre);
+    const porTienda = Shopping.datosPorTienda(item.nombre);
 
     // la tienda que se abre: la más barata del producto (o la primera)
     const tiendaInicial = (item.tienda && item.tienda.id) || (tiendas[0] && tiendas[0].id) || '';
-    const nombreInicial = porTienda[tiendaInicial] || (productos[0] && productos[0].nombre) || item.nombre;
+    const datosInicial = porTienda[tiendaInicial] || {};
+    const nombreInicial = datosInicial.nombre || (productos[0] && productos[0].nombre) || item.nombre;
+    const unidadInicial = datosInicial.unidad || 'ud';
+    const formatoInicial = datosInicial.formato || '';
 
     const listaPrecios = ofertas.length ? `
       <div class="shop-prices">
@@ -1254,7 +1292,20 @@ const App = {
         "Plátano canario" en Carrefour).
       </p>
 
-      <label style="font-size: 13px; color: var(--color-text-muted);">Precio (€)</label>
+      <label style="font-size: 13px; color: var(--color-text-muted);">Cómo lo venden en esa tienda</label>
+      <select id="sp-unidad" class="form-input" style="margin-bottom: 12px;" onchange="App.onUnidadChange()">
+        <option value="ud" ${unidadInicial !== 'kg' && unidadInicial !== 'l' ? 'selected' : ''}>Por unidad o por formato (€ la bolsa, la pieza…)</option>
+        <option value="kg" ${unidadInicial === 'kg' ? 'selected' : ''}>Por kilo (€/kg)</option>
+        <option value="l" ${unidadInicial === 'l' ? 'selected' : ''}>Por litro (€/l)</option>
+      </select>
+
+      <label id="sp-formato-label" style="font-size: 13px; color: var(--color-text-muted); ${unidadInicial === 'kg' || unidadInicial === 'l' ? 'display:none;' : ''}">
+        Peso del formato (g) — ej: la bolsa son 500 g
+      </label>
+      <input type="text" id="sp-formato" class="form-input" inputmode="numeric" placeholder="500"
+             value="${formatoInicial}" style="margin-bottom: 12px; ${unidadInicial === 'kg' || unidadInicial === 'l' ? 'display:none;' : ''}">
+
+      <label id="sp-precio-label" style="font-size: 13px; color: var(--color-text-muted);">${this._labelPrecio(unidadInicial)}</label>
       <input type="text" id="sp-precio" class="form-input" inputmode="decimal"
              placeholder="0,00" style="margin-bottom: 16px;">
 
@@ -1268,15 +1319,40 @@ const App = {
   },
 
   // Al cambiar de tienda, el nombre del producto se pone el que ya se usa
-  // en esa tienda (si lo hay).
+  // en esa tienda (si lo hay), y también cómo lo venden.
   onPriceStoreChange(key) {
     const items = Shopping.buildList();
     const item = items.find(i => i.key === key);
     if (!item) return;
     const tiendaId = document.getElementById('sp-tienda')?.value;
-    const nombre = Shopping.nombresPorTienda(item.nombre)[tiendaId];
+    const datos = Shopping.datosPorTienda(item.nombre)[tiendaId];
     const inp = document.getElementById('sp-producto');
-    if (inp && nombre) inp.value = nombre;
+    if (inp && datos && datos.nombre) inp.value = datos.nombre;
+    if (datos) {
+      const sel = document.getElementById('sp-unidad');
+      if (sel) sel.value = datos.unidad || 'ud';
+      const f = document.getElementById('sp-formato');
+      if (f) f.value = datos.formato || '';
+    }
+    this.onUnidadChange();
+  },
+
+  // El campo del peso del formato solo aparece si lo venden por unidad.
+  onUnidadChange() {
+    const unidad = document.getElementById('sp-unidad')?.value || 'ud';
+    const porUnidad = unidad === 'ud';
+    const lbl = document.getElementById('sp-formato-label');
+    const inp = document.getElementById('sp-formato');
+    if (lbl) lbl.style.display = porUnidad ? '' : 'none';
+    if (inp) inp.style.display = porUnidad ? '' : 'none';
+    const pl = document.getElementById('sp-precio-label');
+    if (pl) pl.textContent = this._labelPrecio(unidad);
+  },
+
+  _labelPrecio(unidad) {
+    if (unidad === 'kg') return 'Precio (€ por kg)';
+    if (unidad === 'l') return 'Precio (€ por litro)';
+    return 'Precio (€)';
   },
 
   savePrice(key) {
@@ -1285,6 +1361,8 @@ const App = {
     const tiendaId = document.getElementById('sp-tienda')?.value;
     const nombre = document.getElementById('sp-producto')?.value.trim();
     const precio = document.getElementById('sp-precio')?.value;
+    const unidad = document.getElementById('sp-unidad')?.value || 'ud';
+    const formato = document.getElementById('sp-formato')?.value;
     const valor = Shopping._num(precio);
 
     if (!item || !tiendaId || !nombre || valor === null) {
@@ -1292,7 +1370,7 @@ const App = {
       return;
     }
 
-    Shopping.setPrecioEnTienda(item.nombre, tiendaId, nombre, valor);
+    Shopping.setPrecioEnTienda(item.nombre, tiendaId, nombre, valor, { unidad, formato });
     Components.modal.close();
     Components.toast.show(`✅ ${Shopping._precio(valor)} en ${Shopping.getTienda(tiendaId).nombre}`);
     this.renderShoppingView();

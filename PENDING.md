@@ -1,3 +1,42 @@
+# PENDING — Sesión del 2026-11-25 (v53)
+
+## Precios por kilo y por unidad, comparables entre supermercados (issue #7)
+
+El pimiento es el ejemplo: Mercadona lo vende **por kilo** (4,50 €/kg) y
+Carrefour en **bolsa de 500 g** (1,79 €). Comparados en crudo ("1,79 €" vs
+"4,50 €") no dicen nada: la bolsa son 3,58 €/kg, así que Mercadona es más
+barato aunque el número sea mayor.
+
+### Qué hay ahora
+
+- **Cómo lo vende cada súper**: el modal 🏷️ tiene **"Cómo lo venden en esa
+  tienda"** (por unidad o por formato · por kilo · por litro) y **"Peso del
+  formato"** (ej: la bolsa son 500 g). Al cambiar de tienda se rellena solo
+  con lo que ya se sabe de ese súper.
+- **Cada fila compara con la misma base**:
+  - 🏪 Mercadona · Pimiento verde — 4,50 €/kg → 1,35 € (300 g)
+  - 🏪 Carrefour · Pimiento verde bolsa 500 g — 1,79 € / 500 g · 3,58 €/kg → 1,07 € (300 g)
+  - 💰 mejor €/kg: el que gana en la base comparable.
+- **Lo que se paga de verdad**: el total estimado (y el 🗺️ reparto por tienda)
+  suman el importe **prorrateado** a lo que pide la lista (300 g), no el kilo
+  entero. Antes un producto a 4,50 €/kg sumaba 4,50 € aunque la receta pidiera
+  300 g.
+- El **➕ Producto** tiene los mismos campos (unidad y peso del formato).
+- El texto que se copia (📋) lleva la unidad y el precio comparable.
+
+### Lo que no cambia
+
+- Los productos **ya guardados** (sin unidad) se siguen mostrando en crudo y
+  **no se comparan entre sí por kilo** (no hay base común). El comparador solo
+  se activa cuando los datos lo permiten.
+- Un producto que el súper vende por kilo y cuya receta pide unidades ("2
+  pimientos") usa el peso del formato si lo hay; si no, el importe sale sin
+  prorratear.
+
+`tests/shopping.test.js`: **106 tests** (10 nuevos para el caso pimiento).
+`tests/shopping-flow.test.js`: **30 tests** (8 nuevos cargando un precio por
+kilo y otro por unidad desde el modal real).
+
 # PENDING — Sesión del 2026-11-25 (v52)
 
 ## El precio con coma decimal no se guardaba (issue #2, segunda vuelta)
